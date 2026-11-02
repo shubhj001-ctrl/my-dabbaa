@@ -9,6 +9,10 @@ import {
   registerSchema,
   resetPasswordSchema,
 } from "@/lib/validations/auth";
+import {
+  registrationOtpSchema,
+  registrationResendSchema,
+} from "@/lib/validations/registration-otp";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/types/navigation";
 
@@ -16,6 +20,7 @@ export type AuthFormState = {
   message?: string;
   success?: boolean;
   fieldErrors?: Record<string, string>;
+  verificationEmail?: string;
 };
 
 function formText(formData: FormData, name: string) {
@@ -113,7 +118,7 @@ export async function registerAction(
       email: parsed.data.email,
       password: parsed.data.password,
       options: {
-        emailRedirectTo: `${siteUrl}/auth/callback`,
+        emailRedirectTo: `${siteUrl}/auth/confirm`,
         data: {
           full_name: parsed.data.fullName,
           phone: parsed.data.phone,
@@ -141,7 +146,8 @@ export async function registerAction(
       return {
         success: true,
         message:
-          "If registration is complete, check your email for a confirmation link before logging in.",
+          "We sent a 6-digit verification code to your email.",
+        verificationEmail: parsed.data.email,
       };
     }
 
@@ -190,6 +196,113 @@ export async function registerAction(
     message:
       "Your account was created, but we couldn't complete sign-in. Please log in to continue.",
   };
+}
+
+export async function verifyRegistrationOtpAction(
+  _previousState: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const parsed = registrationOtpSchema.safeParse({
+    email: formText(formData, "email"),
+    token: formText(formData, "token"),
+  });
+
+  if (!parsed.success) {
+    return { fieldErrors: firstFieldErrors(parsed.error) };
+  }
+
+  let stage = "supabase_client";
+  let redirectPath: string | undefined;
+  try {
+    const supabase = await createClient();
+    stage = "verify_signup_otp";
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: parsed.data.email,
+      token: parsed.data.token,
+      type: "signup",
+    });
+
+    if (error || !data.user) {
+      if (error) logRegistrationFailure(stage, error);
+      return {
+        message: "That code is invalid or expired. Request a new code and try again.",
+      };
+    }
+
+    stage = "profile_lookup_after_verification";
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role, is_active")
+      .eq("id", data.user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      logRegistrationFailure(stage, profileError);
+      return {
+        message:
+          "Your email is verified, but we couldn't finish setting up your account. Please log in or contact support.",
+      };
+    }
+
+    if (
+      !profile ||
+      !profile.is_active ||
+      (profile.role !== "customer" && profile.role !== "provider")
+    ) {
+      console.error("[auth.register] verified profile check failed", {
+        stage: "profile_verification",
+        profileFound: Boolean(profile),
+        profileActive: profile?.is_active ?? false,
+        allowedRole: profile?.role === "customer" || profile?.role === "provider",
+      });
+      return {
+        message:
+          "Your email is verified, but we couldn't finish setting up your account. Please contact support.",
+      };
+    }
+
+    redirectPath = roleHome(profile.role);
+  } catch (error) {
+    logRegistrationFailure(stage, error);
+    return {
+      message: "We couldn't verify the code right now. Please try again.",
+    };
+  }
+
+  if (redirectPath) redirect(redirectPath);
+  return { message: "We couldn't complete sign-in. Please log in to continue." };
+}
+
+export async function resendRegistrationOtpAction(
+  _previousState: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const parsed = registrationResendSchema.safeParse({
+    email: formText(formData, "email"),
+  });
+  if (!parsed.success) return { message: "Enter a valid email address." };
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: parsed.data.email,
+    });
+    if (error) {
+      logRegistrationFailure("resend_signup_otp", error);
+      return {
+        message: "We couldn't send another code yet. Wait a moment and try again.",
+      };
+    }
+
+    return {
+      success: true,
+      message: "A new 6-digit code has been sent if the account can be verified.",
+    };
+  } catch (error) {
+    logRegistrationFailure("resend_signup_otp", error);
+    return { message: "We couldn't send another code right now. Try again later." };
+  }
 }
 
 export async function loginAction(

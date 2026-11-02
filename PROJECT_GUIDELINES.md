@@ -49,6 +49,7 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 - Protect customer profile access with explicit customer authorization and a verified successful activation for the matching provider/customer pair. Keep the unique pair invariant enforced by database constraints and idempotent server-side payment handling when implemented.
 - Supabase Storage buckets and object policies must be explicitly classified as public or private before use. Realtime subscriptions must rely on the same authorization boundaries as reads.
 - The checked-in `.env.example` contains placeholders only. Never expose service-role, Razorpay secret, or Resend credentials through `NEXT_PUBLIC_*`.
+- Supabase Auth email confirmation can use the server-side `send-auth-email` Edge Function and an EmailJS template. EmailJS credentials and the Supabase Send Email Hook signing secret are Supabase Function secrets only; never expose them through `NEXT_PUBLIC_*` or browser code.
 
 ### Integrations deferred to later stages
 
@@ -64,6 +65,38 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 - Request submission, withdrawal, acceptance, and rejection are performed by narrowly scoped authenticated database RPCs. RLS exposes request rows only to the customer, the owning kitchen provider, and trusted administrators. Profile contact fields are never joined into provider request reads.
 - The homepage tiffin story uses CSS view-timeline scroll animation where supported and shows a complete static illustration otherwise. Reduced-motion preferences disable the motion and retain the full composition.
 - Deploy the Next.js application to Vercel after production environment variables and Supabase policies are configured.
+
+### Supabase Auth confirmation email via EmailJS
+
+EmailJS is not an SMTP server. This project calls EmailJS from a Supabase Edge Function configured as Supabase Auth's signed Send Email Hook; authentication tokens are never sent through the browser or logged.
+
+1. In EmailJS, connect an email service and create a template. Set the recipient email to `{{to_email}}`; include `{{action_label}}`, `{{app_name}}`, and `{{otp_code}}`. For signup confirmation, tell the user to enter the six-digit `{{otp_code}}` on the registration page. Include a separate action link whose URL is `{{confirmation_url}}` for recovery and other link-based Auth messages. The confirmation URL points to `/auth/confirm`, which verifies the Supabase `token_hash` and routes password recovery to `/reset-password`.
+2. Record the EmailJS Service ID, Template ID, Public Key, and Private Key from its dashboard. Keep the Private Key confidential.
+3. Install and authenticate the Supabase CLI, link the local project with `supabase link --project-ref <project-ref>`, then set Edge Function secrets (substitute values locally; never commit them):
+
+   ```powershell
+   supabase secrets set EMAILJS_SERVICE_ID=<service-id> EMAILJS_TEMPLATE_ID=<template-id> EMAILJS_PUBLIC_KEY=<public-key> EMAILJS_PRIVATE_KEY=<private-key> APP_SITE_URL=https://mydabbaa.vercel.app
+   ```
+
+4. Deploy the function:
+
+   ```powershell
+   supabase functions deploy send-auth-email
+   ```
+
+   `supabase/config.toml` disables Supabase's built-in JWT check for this function because Auth hooks use Standard Webhooks signatures instead; the function verifies that signature and rejects unsigned requests.
+5. In Supabase Dashboard → Authentication → Hooks, enable the **Send Email** HTTP hook. Set its URL to `https://<project-ref>.supabase.co/functions/v1/send-auth-email`, generate/copy its `v1,whsec_...` signing secret, and set it as a function secret:
+
+   ```powershell
+   supabase secrets set SEND_EMAIL_HOOK_SECRETS='v1,whsec_<hook-secret>'
+   ```
+
+   Redeploy the function after changing its secrets if needed. Store the hook secret only in Supabase Function Secrets and the Supabase Auth Hook configuration.
+6. Apply `supabase/migrations/20261103000300_profiles_after_email_verification.sql` after the profile foundation migration. It moves public profile creation to the Auth email-confirmed event, so an unverified signup does not yet create a `profiles` row.
+7. Enable the Email provider and email confirmations in Supabase Auth. Set the email OTP length to 6 digits and choose an expiry suitable for your sign-in policy. Supabase invokes the Send Email Hook instead of its built-in email sender; no SMTP server is needed for hooked Auth messages. Add `https://mydabbaa.vercel.app/auth/confirm` to allowed redirect URLs (also add `http://localhost:3000/auth/confirm` for link-based recovery in local testing). Keep `NEXT_PUBLIC_SITE_URL=https://mydabbaa.vercel.app` in Vercel Production and set `http://localhost:3000` locally.
+8. Test customer signup, provider signup, OTP resend, invalid/expired codes, and password recovery. Signup should show the six-digit code form; verification should establish the Supabase session and route according to the profile role. Check Supabase Function logs for delivery errors; diagnostic logs intentionally omit recipient addresses, token hashes, and secrets.
+
+EmailJS free/paid limits and deliverability are determined by the connected provider and EmailJS account. This integration is a small-volume option, not an SMTP-compatible provider; review EmailJS sending limits and abuse protections before public launch. No EmailJS credentials belong in Vercel variables or `.env.local`.
 
 ## Stage 2 marketplace setup
 
@@ -104,9 +137,9 @@ public/         Static assets
 
 1. Create a Supabase project and copy its project URL and publishable/anon key into `.env.local` together with `NEXT_PUBLIC_SITE_URL`.
 2. Apply `supabase/migrations/20261102225200_profiles_auth_foundation.sql` using the Supabase SQL Editor, or initialize/link the Supabase CLI and run `npx supabase db push`.
-3. In Supabase Auth, enable email/password sign-in, set the minimum password length to 12, and decide whether email confirmation is required.
-4. Set the Auth Site URL to the local or production app origin. Add `/auth/callback` to the allowed redirect URLs for local and production environments.
-5. Configure a production SMTP provider and review the confirmation and recovery email templates. Their links must retain the application's `/auth/callback` redirect.
+3. In Supabase Auth, enable email/password sign-in, set the minimum password length to 12, and enable email confirmation. Signup confirmation is a six-digit OTP entered on the registration form; password recovery remains a secure confirmation link.
+4. Configure the Supabase Send Email Hook and EmailJS Edge Function described above. Supabase/Auth generates and verifies the OTP; EmailJS only delivers the email and no SMTP server is required for hooked Auth emails.
+5. Set the Auth Site URL to the local or production app origin. Add `/auth/confirm` to allowed redirect URLs for link-based recovery, and keep `NEXT_PUBLIC_SITE_URL` aligned with each environment.
 6. Create/invite the Auth user through a trusted admin process with `full_name` and `phone` user metadata, then provision the role using the Supabase SQL Editor as a project administrator. Never grant that role through `/register`.
 
 For controlled admin provisioning, replace the UUID with the invited Auth user's ID and run this as a trusted database administrator:

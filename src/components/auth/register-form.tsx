@@ -8,7 +8,9 @@ import {
 } from "@/components/auth/auth-field";
 import { SubmitButton } from "@/components/auth/submit-button";
 import {
+  resendRegistrationOtpAction,
   registerAction,
+  verifyRegistrationOtpAction,
   type AuthFormState,
 } from "@/services/auth/actions";
 
@@ -20,6 +22,15 @@ export function RegisterForm({
   initialRole?: "customer" | "provider";
 }) {
   const [state, formAction] = useActionState(registerAction, initialState);
+
+  if (state.verificationEmail) {
+    return (
+      <RegistrationOtpForm
+        email={state.verificationEmail}
+        notice={state.message}
+      />
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4" noValidate>
@@ -150,5 +161,77 @@ export function RegisterForm({
         </Link>
       </p>
     </form>
+  );
+}
+
+function RegistrationOtpForm({
+  email,
+  notice,
+}: {
+  email: string;
+  notice?: string;
+}) {
+  const [verifyState, verifyAction, isVerifying] = useActionState(
+    verifyRegistrationOtpAction,
+    initialState,
+  );
+  const [resendState, resendAction, isResending] = useActionState(
+    resendRegistrationOtpAction,
+    initialState,
+  );
+
+  return (
+    <div className="space-y-5">
+      <AuthFormMessage message={notice} success />
+      <div>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Enter the 6-digit code we sent to <strong>{email}</strong>. The code
+          expires; request a fresh one if needed.
+        </p>
+      </div>
+      <form action={verifyAction} className="space-y-4">
+        <input type="hidden" name="email" value={email} />
+        <div className="space-y-1.5">
+          <label htmlFor="registrationOtp" className="block text-sm font-medium text-foreground">
+            Email verification code
+          </label>
+          <input
+            id="registrationOtp"
+            name="token"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            minLength={6}
+            required
+            autoFocus
+            aria-invalid={Boolean(verifyState.fieldErrors?.token)}
+            aria-describedby={verifyState.fieldErrors?.token ? "registrationOtp-error" : undefined}
+            className="auth-input"
+          />
+          {verifyState.fieldErrors?.token ? (
+            <p id="registrationOtp-error" className="text-sm text-destructive" role="alert">
+              {verifyState.fieldErrors.token}
+            </p>
+          ) : null}
+        </div>
+        <AuthFormMessage message={verifyState.message} />
+        <SubmitButton pendingLabel="Verifying code…" disabled={isVerifying}>
+          Verify email and create account
+        </SubmitButton>
+      </form>
+      <form action={resendAction}>
+        <input type="hidden" name="email" value={email} />
+        <AuthFormMessage message={resendState.message} success={resendState.success} />
+        <button
+          className="min-h-10 w-full rounded-full text-sm font-semibold text-primary underline-offset-4 hover:underline disabled:opacity-60"
+          disabled={isResending}
+          type="submit"
+        >
+          {isResending ? "Sending a new code…" : "Resend code"}
+        </button>
+      </form>
+    </div>
   );
 }

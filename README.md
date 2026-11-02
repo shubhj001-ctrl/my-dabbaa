@@ -37,8 +37,14 @@ Next.js App Router, strict TypeScript, Tailwind CSS v4, shadcn/ui (Base UI), Sup
 
 ## Environment safety
 
-`.env.example` contains placeholders only. The app requires the public Supabase URL/key and canonical site URL for auth email redirects. Stage 2's validated image endpoint also requires `SUPABASE_SERVICE_ROLE_KEY` as a server-only environment variable; it must never be exposed to browser code. Stage 3 uses database-backed in-app notifications and requires no email provider configuration. Never commit `.env.local` or expose any service-role, Razorpay, or Resend secret.
+`.env.example` contains placeholders only. The app requires the public Supabase URL/key and canonical site URL for Auth redirects. Stage 2's validated image endpoint also requires `SUPABASE_SERVICE_ROLE_KEY` as a server-only environment variable; it must never be exposed to browser code. Signup email OTPs are sent by the `send-auth-email` Edge Function through EmailJS; configure its `EMAILJS_*`, `APP_SITE_URL`, and `SEND_EMAIL_HOOK_SECRETS` values as Supabase function secrets, not browser or Vercel variables. Stage 3 request notifications are in-app only. Never commit `.env.local` or expose any service-role, Razorpay, EmailJS private, or Resend secret.
 
 ## Stage 3 request workflow
 
 Apply `supabase/migrations/20261103000200_customer_requests.sql` after the Stage 2 marketplace migration. Authenticated customers submit and withdraw pending enquiries from kitchen profiles and `/requests`; providers review, accept, or reject enquiries at `/provider/requests`. Customer/provider notifications are written by database triggers and appear on those request pages. An accepted enquiry remains awaiting the later activation stage: this app does not collect payment or reveal customer phone/email.
+
+## Supabase Auth email via EmailJS
+
+The Supabase Auth Send Email Hook in `supabase/functions/send-auth-email` calls EmailJS from a server-side Edge Function; EmailJS keys and the Supabase webhook signing secret are never used in browser code. Deploy the function, configure its secrets with the Supabase CLI, then enable it under **Authentication → Hooks → Send Email** using the deployed function URL and matching webhook secret. For signup, the EmailJS template sends the `{{otp_code}}` value for entry on the registration screen. Include `{{confirmation_url}}` for password-recovery and other link-based Auth messages. The confirmation route verifies the Supabase `token_hash` and routes password recovery to `/reset-password`. See the setup details in `PROJECT_GUIDELINES.md`.
+
+Apply `supabase/migrations/20261103000300_profiles_after_email_verification.sql` after the profile foundation migration. It creates the public profile only after Supabase confirms the email OTP; unconfirmed Auth signups do not yet have a `profiles` row.
