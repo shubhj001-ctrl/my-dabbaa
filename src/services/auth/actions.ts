@@ -54,6 +54,35 @@ function roleHome(role: AppRole) {
   return "/admin/dashboard";
 }
 
+function logRegistrationFailure(stage: string, error: unknown) {
+  const diagnostic =
+    typeof error === "object" && error !== null
+      ? error
+      : undefined;
+  const errorName =
+    error instanceof Error
+      ? error.name
+      : typeof diagnostic === "object" &&
+          diagnostic &&
+          "name" in diagnostic &&
+          typeof diagnostic.name === "string"
+        ? diagnostic.name
+        : "UnknownError";
+  const errorCode =
+    typeof diagnostic === "object" &&
+    diagnostic &&
+    "code" in diagnostic &&
+    typeof diagnostic.code === "string"
+      ? diagnostic.code
+      : undefined;
+
+  console.error("[auth.register] operation failed", {
+    stage,
+    errorName,
+    ...(errorCode ? { errorCode } : {}),
+  });
+}
+
 export async function registerAction(
   _previousState: AuthFormState,
   formData: FormData,
@@ -72,49 +101,95 @@ export async function registerAction(
     return { fieldErrors: firstFieldErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    options: {
-      emailRedirectTo: `${getSiteUrl()}/auth/callback`,
-      data: {
-        full_name: parsed.data.fullName,
-        phone: parsed.data.phone,
-        role: parsed.data.role,
+  let redirectPath: string | undefined;
+  let stage = "site_url";
+
+  try {
+    const siteUrl = getSiteUrl();
+    stage = "supabase_client";
+    const supabase = await createClient();
+    stage = "supabase_signup";
+    const { data, error } = await supabase.auth.signUp({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      options: {
+        emailRedirectTo: `${siteUrl}/auth/callback`,
+        data: {
+          full_name: parsed.data.fullName,
+          phone: parsed.data.phone,
+          role: parsed.data.role,
+        },
       },
-    },
-  });
+    });
 
-  if (error || !data.user) {
+    if (error || !data.user) {
+      if (error) {
+        logRegistrationFailure("supabase_signup", error);
+      } else {
+        console.error("[auth.register] Supabase returned no user", {
+          stage: "supabase_signup",
+        });
+      }
+
+      return {
+        message:
+          "We couldn't create your account. If you already registered, try logging in or resetting your password.",
+      };
+    }
+
+    if (!data.session) {
+      return {
+        success: true,
+        message:
+          "If registration is complete, check your email for a confirmation link before logging in.",
+      };
+    }
+
+    stage = "profile_lookup";
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role, is_active")
+      .eq("id", data.user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      logRegistrationFailure("profile_lookup", profileError);
+      return {
+        message:
+          "Your account was created, but we couldn't finish setting up your profile. Please contact support.",
+      };
+    }
+
+    if (!profile || !profile.is_active || profile.role !== parsed.data.role) {
+      console.error("[auth.register] profile verification failed", {
+        stage: "profile_verification",
+        profileFound: Boolean(profile),
+        profileActive: profile?.is_active ?? false,
+        roleMatchesSelection: profile?.role === parsed.data.role,
+      });
+      return {
+        message:
+          "Your account was created, but we couldn't finish setting up your profile. Please contact support.",
+      };
+    }
+
+    redirectPath = roleHome(profile.role);
+  } catch (error) {
+    logRegistrationFailure(stage, error);
     return {
       message:
-        "We couldn't create your account. If you already registered, try logging in or resetting your password.",
+        "Account registration is temporarily unavailable. Please try again later.",
     };
   }
 
-  if (!data.session) {
-    return {
-      success: true,
-      message:
-        "If registration is complete, check your email for a confirmation link before logging in.",
-    };
+  if (redirectPath) {
+    redirect(redirectPath);
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role, is_active")
-    .eq("id", data.user.id)
-    .maybeSingle();
-
-  if (profileError || !profile || !profile.is_active) {
-    return {
-      message:
-        "Your account was created, but we couldn't finish setting up your profile. Please contact support.",
-    };
-  }
-
-  redirect(roleHome(profile.role));
+  return {
+    message:
+      "Your account was created, but we couldn't complete sign-in. Please log in to continue.",
+  };
 }
 
 export async function loginAction(
