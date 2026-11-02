@@ -11,10 +11,12 @@ type RequestDisplayFields = Pick<
   | "preferred_start_date"
   | "message"
   | "consent_given"
+  | "contact_sharing_consent"
   | "status"
   | "accepted_at"
   | "rejected_at"
   | "withdrawn_at"
+  | "activated_at"
   | "customer_name"
   | "kitchen_name"
   | "kitchen_photo_path"
@@ -85,7 +87,7 @@ export async function getCustomerRequests(): Promise<CustomerRequestsResult> {
   const [requestsResult, notificationsResult] = await Promise.all([
     supabase
       .from("customer_requests")
-        .select("id,preferred_meal,preferred_start_date,message,consent_given,status,accepted_at,rejected_at,withdrawn_at,customer_name,kitchen_name,kitchen_photo_path,created_at,updated_at")
+        .select("id,preferred_meal,preferred_start_date,message,consent_given,contact_sharing_consent,status,accepted_at,rejected_at,withdrawn_at,activated_at,customer_name,kitchen_name,kitchen_photo_path,created_at,updated_at")
       .order("created_at", { ascending: false }),
     getNotifications(),
   ]);
@@ -105,7 +107,7 @@ export async function getProviderRequests(): Promise<ProviderRequestsResult> {
   const [requestsResult, notificationsResult] = await Promise.all([
     supabase
       .from("customer_requests")
-      .select("id,preferred_meal,preferred_start_date,message,consent_given,status,accepted_at,rejected_at,withdrawn_at,customer_name,kitchen_name,kitchen_photo_path,created_at,updated_at")
+      .select("id,preferred_meal,preferred_start_date,message,consent_given,contact_sharing_consent,status,accepted_at,rejected_at,withdrawn_at,activated_at,customer_name,kitchen_name,kitchen_photo_path,created_at,updated_at")
       .order("created_at", { ascending: false }),
     getNotifications(),
   ]);

@@ -4,7 +4,7 @@
 
 My Dabbaa is a hyperlocal marketplace connecting customers with independent tiffin providers in Chandigarh, India. The product has three roles: customer, provider, and administrator.
 
-Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side authorization, and the private `profiles` table foundation. Stage 2 adds provider kitchen applications, admin approval, informational plans and menus, and public discovery of approved listings. Stage 3 adds customer enquiries, provider responses, in-app notifications, and the homepage tiffin scroll story. Activation payments, transactional email, food subscriptions, communities, and reviews remain deferred.
+Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side authorization, and the private `profiles` table foundation. Stage 2 adds provider kitchen applications, admin approval, informational plans and menus, and public discovery of approved listings. Stage 3 adds customer enquiries, provider responses, in-app notifications, and the homepage tiffin scroll story. Stage 4 adds provider activation payments and authorized profile unlocking. Transactional email beyond Auth, food subscriptions, communities, and reviews remain deferred.
 
 ## Business rules
 
@@ -16,10 +16,11 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 - Customers may contact providers by phone and submit a request to join a provider's service.
 - Before a provider activation is complete, providers may see only the customer's name and request details the customer has authorized.
 - A provider accepts a request before paying the one-time ₹199 activation fee.
-- Provider acceptance is free and does not activate a customer, create a subscription, collect payment, or reveal customer phone/email. Accepted enquiries remain awaiting activation.
+- Provider acceptance is free and does not activate a customer, create a subscription, collect payment, or reveal customer phone/email. Accepted enquiries remain awaiting activation until Razorpay confirms a captured payment through a signed webhook.
 - Customer requests require consent, are limited to one pending or accepted request per kitchen/customer, and may be withdrawn only while pending.
-- Providers see a trusted customer-name snapshot and only the authorized request details; profile phone and email remain protected until a future successful activation flow.
-- A successful activation unlocks only the full customer profile details that the customer authorized.
+- Request consent explicitly authorizes sharing the customer's full name, email, and phone with that selected kitchen only after verified activation. Legacy accepted requests without this recorded consent require a customer opt-in before payment can begin.
+- Providers see a trusted customer-name snapshot and only the authorized request details; profile phone and email remain protected until verified activation.
+- A successful activation unlocks only the full customer profile details that the customer authorized, and only to the provider who owns the activated kitchen.
 - The activation fee applies once per unique customer-and-kitchen pair. A repeat activation for the same pair must be idempotent and must not create another fee.
 - The activation payment is paid by the provider; customers do not pay this platform fee.
 - Providers arrange food subscriptions and collect subscription payments directly from customers. Food subscription payments are not processed by Dabbaa.
@@ -46,14 +47,22 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 - The `profiles` table has RLS enabled. A user can select only their own profile and update only full name, phone, and avatar URL. Admin reads are limited to JWTs carrying the trusted app-metadata role claim. Profile inserts/deletes and role updates are not granted to normal users.
 - Passwords are managed only by Supabase Auth. Auth errors returned to public forms are generic, and duplicate registration and password-reset responses avoid account enumeration.
 - Plan RLS policies around least privilege: public discovery data is distinct from customer profile data, request details, provider-only data, and administrator operations.
-- Protect customer profile access with explicit customer authorization and a verified successful activation for the matching provider/customer pair. Keep the unique pair invariant enforced by database constraints and idempotent server-side payment handling when implemented.
+- Protect customer profile access with explicit customer authorization and a verified successful activation for the matching provider/customer pair. The Stage 4 migration enforces the unique pair invariant and serves contact details through an ownership-checked security-definer function.
 - Supabase Storage buckets and object policies must be explicitly classified as public or private before use. Realtime subscriptions must rely on the same authorization boundaries as reads.
 - The checked-in `.env.example` contains placeholders only. Never expose service-role, Razorpay secret, or Resend credentials through `NEXT_PUBLIC_*`.
 - Supabase Auth email confirmation can use the server-side `send-auth-email` Edge Function and an EmailJS template. EmailJS credentials and the Supabase Send Email Hook signing secret are Supabase Function secrets only; never expose them through `NEXT_PUBLIC_*` or browser code.
 
+### Payment integration
+
+- Razorpay is used only for the provider-paid ₹199 customer activation fee. Store amounts as integer paise; create orders server-side for exactly `19900` paise and `INR`.
+- `src/app/api/webhooks/razorpay/route.ts` verifies the signature against the original raw request body. Only a verified `payment.captured` event can invoke the atomic activation RPC; `payment.failed` never unlocks customer details. A browser Checkout callback is only a signal to check status.
+- The Stage 4 migration is `supabase/migrations/20261103000400_activation_payments.sql`; apply it after the request migration. `activation_payments` and `kitchen_customers` have RLS enabled, and normal users have no write grants. The database enforces one customer per kitchen and serializes activation processing.
+- Keep `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, and `SUPABASE_SERVICE_ROLE_KEY` server-side only. The public Razorpay key ID may be sent to Checkout. Configure test mode webhook events `payment.captured` and `payment.failed` at `/api/webhooks/razorpay`.
+- Never represent an activation as complete until the webhook transaction has recorded the captured payment. Food subscriptions and food payments remain outside the platform.
+- A delayed or abandoned Checkout remains pending and is checked against server-side payment status; retries must not create another activation for an open customer/kitchen pair.
+
 ### Integrations deferred to later stages
 
-- Razorpay is reserved for provider activation payments only. Verify payment results server-side; never trust a client-side success callback as proof of payment.
 - Resend is reserved for transactional email and is not required for Stage 3; request notifications are in-app only.
 - Stage 2 database objects are defined in `supabase/migrations/20261103000100_kitchen_marketplace.sql`. Apply it after the Stage 1 profile migration.
 - Stage 3 request and in-app notification objects are defined in `supabase/migrations/20261103000200_customer_requests.sql`. Apply after the Stage 2 kitchen marketplace migration.
@@ -63,6 +72,7 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 - Supabase Realtime is not required for this stage. Future migrations, Storage buckets, and subscriptions must retain least-privilege RLS.
 - Food subscription payments and provider delivery operations stay outside the platform.
 - Request submission, withdrawal, acceptance, and rejection are performed by narrowly scoped authenticated database RPCs. RLS exposes request rows only to the customer, the owning kitchen provider, and trusted administrators. Profile contact fields are never joined into provider request reads.
+- Stage 4's `get_provider_activated_customers()` RPC returns customer contact fields only when the caller is an active provider, owns the kitchen, and the consented request has a verified activation record. Payment status changes and activation notifications are committed in the same database transaction.
 - The homepage tiffin story uses CSS view-timeline scroll animation where supported and shows a complete static illustration otherwise. Reduced-motion preferences disable the motion and retain the full composition.
 - Deploy the Next.js application to Vercel after production environment variables and Supabase policies are configured.
 

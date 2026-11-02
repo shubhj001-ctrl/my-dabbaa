@@ -54,6 +54,7 @@ export async function submitCustomerRequestAction(
     p_preferred_start_date: parsed.data.preferredStartDate,
     p_message: parsed.data.message || null,
     p_consent_given: parsed.data.consentGiven,
+    p_contact_sharing_consent: parsed.data.contactSharingConsent,
   });
 
   if (error) {
@@ -93,6 +94,32 @@ export async function withdrawCustomerRequestAction(
       success: false,
       message: "Only a pending request you sent can be withdrawn.",
     };
+  }
+
+  revalidatePath("/requests");
+  revalidatePath("/provider/requests");
+  return { success: true };
+}
+
+export async function authorizeCustomerContactSharingAction(
+  input: unknown,
+): Promise<RequestActionResult> {
+  const parsed = withdrawRequestSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: "That request could not be found." };
+  }
+
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "customer" || !profile.is_active) {
+    return { success: false, message: "Sign in with your customer account to continue." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("authorize_customer_contact_sharing", {
+    p_request_id: parsed.data.requestId,
+  });
+  if (error) {
+    return { success: false, message: "This accepted request could not be updated. Refresh and try again." };
   }
 
   revalidatePath("/requests");

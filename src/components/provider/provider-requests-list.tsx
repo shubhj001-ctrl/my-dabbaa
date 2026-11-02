@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { CalendarDays, Check, Clock3, MapPin, X } from "lucide-react";
 import { KitchenImage } from "@/components/marketplace/kitchen-image";
+import { ActivationPaymentButton } from "@/components/provider/activation-payment-button";
+import Link from "next/link";
 import { respondToCustomerRequestAction } from "@/services/marketplace/request-actions";
 import type { RequestListItem } from "@/services/marketplace/request-queries";
 import type { CustomerRequestStatus } from "@/types/supabase";
@@ -16,7 +18,7 @@ const mealLabel: Record<string, string> = {
 
 const statusMessage: Record<CustomerRequestStatus, string> = {
   pending: "Review the meal preference and timing. Customer contact information stays private.",
-  accepted: "Accepted · awaiting activation. No payment has been taken and no customer contact details have been unlocked.",
+  accepted: "Accepted. The customer’s contact details remain private until the activation payment is verified.",
   rejected: "This request was declined; the customer has been notified.",
   withdrawn: "The customer withdrew this request.",
   expired: "This request has expired.",
@@ -82,7 +84,20 @@ export function ProviderRequestsList({ requests }: { requests: RequestListItem[]
               <span className="inline-flex items-center gap-1.5"><Clock3 size={14} /> Received {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(request.created_at))}</span>
             </div>
             {request.message ? <p className="mt-3 rounded-xl bg-white/70 p-3 text-sm leading-6"><b>Customer note:</b> {request.message}</p> : null}
-            {request.consent_given ? <p className="mt-3 text-xs font-medium text-muted-foreground">Customer consented to share necessary request details. Phone and email remain private.</p> : null}
+            {request.consent_given ? <p className="mt-3 text-xs font-medium text-muted-foreground">{request.activated_at ? "Customer consented to share these details after activation." : "Customer consented to share necessary request details. Phone and email remain private until activation."}</p> : null}
+            {request.status === "accepted" && request.activated_at ? (
+              <p className="mt-4 rounded-xl bg-[#eaf4df] px-4 py-3 text-sm font-semibold text-[#315b43]">
+                Activated · customer contact details are available in <Link className="underline" href="/provider/customers">Customers</Link>.
+              </p>
+            ) : null}
+            {request.status === "accepted" && !request.activated_at && !request.contact_sharing_consent ? (
+              <p className="mt-4 rounded-xl bg-[#fff2c8] px-4 py-3 text-sm leading-6 text-[#51421e]">
+                Waiting for the customer to authorize contact sharing before activation can proceed.
+              </p>
+            ) : null}
+            {request.status === "accepted" && !request.activated_at && request.contact_sharing_consent ? (
+              <ActivationPaymentButton requestId={request.id} />
+            ) : null}
             {request.status === "pending" ? (
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="button" disabled={isPending} onClick={() => respond(request.id, "accepted")} className="button-pop button-lime min-h-10">

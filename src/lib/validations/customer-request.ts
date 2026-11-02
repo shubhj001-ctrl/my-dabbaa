@@ -6,6 +6,7 @@ export const customerRequestSchema = z.object({
   preferredStartDate: z.string().date(),
   message: z.string().trim().max(1000).optional(),
   consentGiven: z.literal(true),
+  contactSharingConsent: z.literal(true),
 });
 
 export const withdrawRequestSchema = z.object({

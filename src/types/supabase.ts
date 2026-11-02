@@ -124,10 +124,13 @@ export type CustomerRequestRow = {
   preferred_start_date: string;
   message: string | null;
   consent_given: boolean;
+  contact_sharing_consent: boolean;
+  contact_sharing_consent_at: string | null;
   status: CustomerRequestStatus;
   accepted_at: string | null;
   rejected_at: string | null;
   withdrawn_at: string | null;
+  activated_at: string | null;
   customer_name: string;
   kitchen_name: string;
   kitchen_photo_path: string | null;
@@ -144,11 +147,64 @@ export type NotificationRow = {
     | "request_received"
     | "request_accepted"
     | "request_rejected"
-    | "request_withdrawn";
+    | "request_withdrawn"
+    | "customer_activated"
+    | "provider_activation_paid";
   title: string;
   body: string;
   read_at: string | null;
   created_at: string;
+};
+
+export type ActivationPaymentStatus =
+  | "created"
+  | "pending"
+  | "success"
+  | "failed"
+  | "refunded";
+
+export type ActivationPaymentRow = {
+  id: string;
+  request_id: string;
+  kitchen_id: string;
+  customer_id: string;
+  provider_id: string;
+  customer_name: string;
+  kitchen_name: string;
+  amount_paise: number;
+  currency: string;
+  status: ActivationPaymentStatus;
+  razorpay_order_id: string | null;
+  razorpay_payment_id: string | null;
+  activation_applied: boolean;
+  paid_at: string | null;
+  failed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type KitchenCustomerRow = {
+  id: string;
+  kitchen_id: string;
+  customer_id: string;
+  request_id: string;
+  activation_payment_id: string;
+  kitchen_name: string;
+  activated_at: string;
+};
+
+export type ProviderActivatedCustomer = {
+  kitchen_customer_id: string;
+  kitchen_id: string;
+  request_id: string;
+  kitchen_name: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  preferred_meal: string;
+  preferred_start_date: string;
+  request_message: string | null;
+  activated_at: string;
 };
 
 type KitchenInsert = Omit<
@@ -205,13 +261,23 @@ export type Database = {
       >;
       customer_requests: Table<
         CustomerRequestRow,
-        Omit<CustomerRequestRow, "id" | "created_at" | "updated_at"> &
-          Partial<Pick<CustomerRequestRow, "id" | "created_at" | "updated_at">>
+        Omit<CustomerRequestRow, "id" | "created_at" | "updated_at" | "activated_at"> &
+          Partial<Pick<CustomerRequestRow, "id" | "created_at" | "updated_at" | "activated_at">>
       >;
       notifications: Table<
         NotificationRow,
         Omit<NotificationRow, "id" | "created_at"> &
           Partial<Pick<NotificationRow, "id" | "created_at">>
+      >;
+      activation_payments: Table<
+        ActivationPaymentRow,
+        Omit<ActivationPaymentRow, "id" | "created_at" | "updated_at" | "paid_at" | "failed_at" | "razorpay_order_id" | "razorpay_payment_id" | "activation_applied"> &
+          Partial<Pick<ActivationPaymentRow, "id" | "created_at" | "updated_at" | "paid_at" | "failed_at" | "razorpay_order_id" | "razorpay_payment_id" | "activation_applied">>
+      >;
+      kitchen_customers: Table<
+        KitchenCustomerRow,
+        Omit<KitchenCustomerRow, "id" | "activated_at"> &
+          Partial<Pick<KitchenCustomerRow, "id" | "activated_at">>
       >;
     };
     Views: Record<string, never>;
@@ -238,8 +304,13 @@ export type Database = {
           p_preferred_start_date: string;
           p_message: string | null;
           p_consent_given: boolean;
+          p_contact_sharing_consent: boolean;
         };
         Returns: string;
+      };
+      authorize_customer_contact_sharing: {
+        Args: { p_request_id: string };
+        Returns: undefined;
       };
       withdraw_customer_request: {
         Args: { p_request_id: string };
@@ -248,6 +319,44 @@ export type Database = {
       respond_to_customer_request: {
         Args: { p_request_id: string; p_decision: string };
         Returns: undefined;
+      };
+      reserve_activation_payment: {
+        Args: { p_request_id: string; p_claim_token: string };
+        Returns: {
+          payment_id: string;
+          razorpay_order_id: string | null;
+          should_create_order: boolean;
+          payment_status: string;
+        }[];
+      };
+      attach_activation_order: {
+        Args: {
+          p_payment_id: string;
+          p_claim_token: string;
+          p_razorpay_order_id: string;
+        };
+        Returns: boolean;
+      };
+      confirm_activation_payment: {
+        Args: {
+          p_razorpay_order_id: string;
+          p_razorpay_payment_id: string;
+          p_amount_paise: number;
+          p_currency: string;
+        };
+        Returns: string;
+      };
+      fail_activation_payment: {
+        Args: {
+          p_razorpay_order_id: string;
+          p_amount_paise: number;
+          p_currency: string;
+        };
+        Returns: string;
+      };
+      get_provider_activated_customers: {
+        Args: Record<string, never>;
+        Returns: ProviderActivatedCustomer[];
       };
     };
     Enums: {

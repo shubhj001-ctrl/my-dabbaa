@@ -33,6 +33,7 @@ export function CustomerRequestForm({
         preferredStartDate: formData.get("preferredStartDate"),
         message: formData.get("message"),
         consentGiven: formData.get("consentGiven") === "on",
+        contactSharingConsent: formData.get("consentGiven") === "on",
       });
       if (!result.success) {
         setMessage(result.message);
@@ -133,9 +134,10 @@ export function CustomerRequestForm({
                 <label className="request-consent">
                   <input name="consentGiven" type="checkbox" required />
                   <span>
-                    I agree that my name and the details in this request can be shared
-                    with this kitchen. My phone and email stay private unless I later
-                    choose to share them after activation.
+                    I agree that my name and request details can be shared with this
+                    kitchen. If the kitchen accepts and completes activation, I also
+                    authorize My Dabbaa to share my full name, email, and phone with
+                    this kitchen so we can coordinate the service.
                   </span>
                 </label>
                 {fieldErrors.consentGiven?.[0] ? (

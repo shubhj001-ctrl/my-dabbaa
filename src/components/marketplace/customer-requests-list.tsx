@@ -3,13 +3,16 @@
 import { useState, useTransition } from "react";
 import { CalendarDays, Clock3, MapPin, X } from "lucide-react";
 import { KitchenImage } from "@/components/marketplace/kitchen-image";
-import { withdrawCustomerRequestAction } from "@/services/marketplace/request-actions";
+import {
+  authorizeCustomerContactSharingAction,
+  withdrawCustomerRequestAction,
+} from "@/services/marketplace/request-actions";
 import type { RequestListItem } from "@/services/marketplace/request-queries";
 import type { CustomerRequestStatus } from "@/types/supabase";
 
 const statusCopy: Record<CustomerRequestStatus, { title: string; detail: string }> = {
   pending: { title: "Waiting on the kitchen", detail: "They’ll review your request and get back to you here." },
-  accepted: { title: "Accepted · awaiting activation", detail: "The kitchen is interested. Activation is the next step; no payment or subscription has been created." },
+  accepted: { title: "Accepted · awaiting activation", detail: "The kitchen is interested. The provider will pay the one-time activation fee; no food payment or subscription is created here." },
   rejected: { title: "Not available right now", detail: "This kitchen couldn’t take on the request. Your next food obsession might be elsewhere." },
   withdrawn: { title: "Request withdrawn", detail: "This request is closed. You can send a new one if your plans change." },
   expired: { title: "Request expired", detail: "This request is no longer active. Explore kitchens to find another match." },
@@ -45,6 +48,24 @@ export function CustomerRequestsList({ requests }: { requests: RequestListItem[]
     });
   }
 
+  function authorizeContactSharing(requestId: string) {
+    setNotice("");
+    startTransition(async () => {
+      const result = await authorizeCustomerContactSharingAction({ requestId });
+      if (!result.success) {
+        setNotice(result.message);
+        return;
+      }
+      setItems((current) =>
+        current.map((request) =>
+          request.id === requestId
+            ? { ...request, contact_sharing_consent: true }
+            : request,
+        ),
+      );
+    });
+  }
+
   if (!items.length) {
     return (
       <section className="provider-empty-card">
@@ -71,8 +92,28 @@ export function CustomerRequestsList({ requests }: { requests: RequestListItem[]
                 <h2>{request.kitchen_name}</h2>
                 <span className={`request-status status-${request.status}`}>{request.status}</span>
               </div>
-              <p className="mt-2 text-sm font-bold">{status.title}</p>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">{status.detail}</p>
+              <p className="mt-2 text-sm font-bold">{request.activated_at ? "Customer profile activated" : status.title}</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{request.activated_at ? "The kitchen will configure your food subscription with you next." : status.detail}</p>
+              {request.activated_at ? (
+                <p className="mt-3 rounded-xl bg-[#eaf4df] px-4 py-3 text-sm leading-6 text-[#315b43]">
+                  <b>Your customer profile is activated.</b> {request.kitchen_name} will configure your food subscription with you next. No subscription has been marked active yet.
+                </p>
+              ) : null}
+              {request.status === "accepted" && !request.activated_at && !request.contact_sharing_consent ? (
+                <div className="mt-4 rounded-xl border border-border bg-white/70 p-4">
+                  <p className="text-sm leading-6">
+                    This request was sent before contact-sharing consent was added. If you want to proceed, authorize the kitchen to receive your full name, email, and phone only after its activation payment is verified.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => authorizeContactSharing(request.id)}
+                    className="button-pop button-lime mt-3 min-h-10 disabled:opacity-60"
+                  >
+                    I authorize contact sharing after activation
+                  </button>
+                </div>
+              ) : null}
               <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5"><CalendarDays size={14} /> Start {request.preferred_start_date}</span>
                 <span className="inline-flex items-center gap-1.5"><MapPin size={14} /> {mealLabel[request.preferred_meal] ?? request.preferred_meal}</span>
