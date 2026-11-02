@@ -12,14 +12,18 @@ import {
 import { KitchenCard } from "@/components/marketplace/kitchen-card";
 import { Navbar } from "@/components/marketplace/navbar";
 import { Footer } from "@/components/marketplace/footer";
-import { kitchens } from "@/data/mock-data/kitchens";
+import type { Kitchen } from "@/types/marketplace";
 
 export function ExploreExperience({
   initialQuery = "",
   initialSector = "all",
+  kitchens: listingData,
+  dataAvailability,
 }: {
   initialQuery?: string;
   initialSector?: string;
+  kitchens: Kitchen[];
+  dataAvailability: "live" | "demo" | "unavailable" | "error";
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState<KitchenFilters>({
@@ -29,21 +33,27 @@ export function ExploreExperience({
 
   const visibleKitchens = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const results = kitchens.filter((kitchen) => {
+    const results = listingData.filter((kitchen) => {
       const matchesQuery =
         !normalizedQuery ||
         `${kitchen.name} ${kitchen.tagline} ${kitchen.location} ${kitchen.mealTypes.join(" ")}`
           .toLowerCase()
           .includes(normalizedQuery);
       const matchesSector =
-        filters.sector === "all" || kitchen.sector === filters.sector;
+        filters.sector === "all" ||
+        kitchen.sector === filters.sector ||
+        kitchen.serviceAreas.includes(filters.sector);
       const matchesMeal =
         filters.mealType === "all" ||
-        kitchen.mealTypes.some((meal) => meal === filters.mealType);
+        kitchen.mealCategories?.some(
+          (meal) => meal.toLowerCase() === filters.mealType,
+        ) ||
+        kitchen.menu.some((meal) => meal.category.toLowerCase() === filters.mealType);
       const matchesVegetarian =
-        !filters.vegetarian || kitchen.isVegetarian;
+        (!filters.vegetarian || kitchen.foodType === "vegetarian" || (!kitchen.foodType && kitchen.isVegetarian)) &&
+        (!filters.nonVegetarian || kitchen.foodType === "non_vegetarian" || kitchen.foodType === "both" || (!kitchen.foodType && !kitchen.isVegetarian));
       const matchesPrice = kitchen.startingPrice <= filters.maxPrice;
-      const matchesRating = kitchen.rating >= filters.minRating;
+      const matchesRating = kitchen.reviewCount === 0 || kitchen.rating >= filters.minRating;
 
       return (
         matchesQuery &&
@@ -61,7 +71,7 @@ export function ExploreExperience({
       if (filters.sort === "price-high") return second.startingPrice - first.startingPrice;
       return second.reviewCount - first.reviewCount;
     });
-  }, [filters, query]);
+  }, [filters, listingData, query]);
 
   return (
     <>
@@ -92,11 +102,10 @@ export function ExploreExperience({
 
         <div className="explore-chips" aria-label="Quick kitchen filters">
           {[
-            ["All the good stuff", "all"],
-            ["Punjabi", "Punjabi"],
-            ["North Indian", "North Indian"],
-            ["Gujarati", "Gujarati"],
-            ["South Indian", "South Indian"],
+            ["Any meal", "all"],
+            ["Breakfast", "breakfast"],
+            ["Lunch", "lunch"],
+            ["Dinner", "dinner"],
           ].map(([label, meal]) => (
             <button
               key={meal}
@@ -108,14 +117,8 @@ export function ExploreExperience({
               {label}
             </button>
           ))}
-          <button
-            type="button"
-            aria-pressed={filters.vegetarian}
-            onClick={() => setFilters({ ...filters, vegetarian: !filters.vegetarian })}
-            className="explore-chip explore-chip-veg"
-          >
-            Veg-only
-          </button>
+          <button type="button" aria-pressed={filters.vegetarian && !filters.nonVegetarian} onClick={() => setFilters({ ...filters, vegetarian: !filters.vegetarian, nonVegetarian: false })} className="explore-chip explore-chip-veg">Veg-only</button>
+          <button type="button" aria-pressed={filters.nonVegetarian} onClick={() => setFilters({ ...filters, nonVegetarian: !filters.nonVegetarian, vegetarian: false })} className="explore-chip explore-chip-nonveg">Non-veg</button>
         </div>
 
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-7">
@@ -130,7 +133,7 @@ export function ExploreExperience({
                   {visibleKitchens.length} kitchens to get to know
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Illustrative sample listings for Chandigarh.
+                  {dataAvailability === "demo" ? "Fictional demo listings for Chandigarh." : "Approved and listed Chandigarh kitchens."}
                 </p>
               </div>
               <label className="flex min-h-10 items-center gap-2 self-start rounded-xl border border-border bg-card px-3 text-xs text-muted-foreground sm:self-auto">
@@ -162,8 +165,9 @@ export function ExploreExperience({
               </div>
             ) : (
               <EmptyState
-                title="No kitchens found just yet"
-                description="Try a different search or widen your filters to meet more neighbourhood kitchens."
+                title={dataAvailability === "error" ? "Listings aren't loading right now." : dataAvailability === "unavailable" ? "Kitchen listings aren't connected yet." : dataAvailability === "demo" ? "No demo kitchens match that vibe." : "Nothing cooking here yet!"}
+                description={dataAvailability === "error" ? "Please try again in a moment." : dataAvailability === "unavailable" ? "Connect the Supabase project and approved listings will appear here." : "Try a different search or widen your filters to meet more neighbourhood kitchens."}
+                action={dataAvailability === "live" || dataAvailability === "demo" ? undefined : { href: "/register?type=provider", label: "List your kitchen for free" }}
               />
             )}
             <p className="mt-6 text-center text-xs text-muted-foreground">

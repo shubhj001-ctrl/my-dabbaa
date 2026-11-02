@@ -1,12 +1,13 @@
 "use client";
 
 import { SlidersHorizontal, X } from "lucide-react";
-import type { MealType } from "@/types/marketplace";
+import { CHANDIGARH_SECTORS } from "@/config/marketplace";
 
 export type KitchenFilters = {
   sector: string;
   mealType: string;
   vegetarian: boolean;
+  nonVegetarian: boolean;
   maxPrice: number;
   minRating: number;
   sort: "popular" | "rating" | "price-low" | "price-high";
@@ -16,17 +17,13 @@ export const initialKitchenFilters: KitchenFilters = {
   sector: "all",
   mealType: "all",
   vegetarian: false,
-  maxPrice: 300,
+  nonVegetarian: false,
+  maxPrice: 10000,
   minRating: 0,
   sort: "popular",
 };
 
-const mealTypes: MealType[] = [
-  "North Indian",
-  "Punjabi",
-  "Gujarati",
-  "South Indian",
-];
+const mealTypes = ["breakfast", "lunch", "dinner"] as const;
 
 type FilterSidebarProps = {
   filters: KitchenFilters;
@@ -71,7 +68,7 @@ export function FilterSidebar({
           aria-label="Filter by Chandigarh sector"
         >
           <option value="all">All Chandigarh</option>
-          {[8, 15, 17, 22, 34, 35, 44, 46].map((sector) => (
+          {CHANDIGARH_SECTORS.map((sector) => (
             <option key={sector} value={`Sector ${sector}`}>
               Sector {sector}
             </option>
@@ -80,7 +77,7 @@ export function FilterSidebar({
       </fieldset>
 
       <fieldset className="filter-fieldset">
-        <legend>Meal style</legend>
+        <legend>Meal time</legend>
         <div className="space-y-2.5">
           <label className="filter-check">
             <input
@@ -89,7 +86,7 @@ export function FilterSidebar({
               checked={filters.mealType === "all"}
               onChange={() => update("mealType", "all")}
             />
-            <span>All meal styles</span>
+            <span>All meals</span>
           </label>
           {mealTypes.map((meal) => (
             <label key={meal} className="filter-check">
@@ -99,41 +96,44 @@ export function FilterSidebar({
                 checked={filters.mealType === meal}
                 onChange={() => update("mealType", meal)}
               />
-              <span>{meal}</span>
+              <span>{meal[0].toUpperCase() + meal.slice(1)}</span>
             </label>
           ))}
         </div>
       </fieldset>
 
-      <label className="filter-check rounded-xl bg-[var(--surface-soft)] p-3">
-        <input
-          type="checkbox"
-          checked={filters.vegetarian}
-          onChange={(event) => update("vegetarian", event.target.checked)}
-        />
-        <span>Vegetarian kitchens</span>
-      </label>
+      <fieldset className="filter-fieldset">
+        <legend>Food style</legend>
+        <label className="filter-check rounded-xl bg-[var(--surface-soft)] p-3">
+          <input type="checkbox" checked={filters.vegetarian} onChange={(event) => onChange({ ...filters, vegetarian: event.target.checked, nonVegetarian: false })} />
+          <span>Veg-only kitchens</span>
+        </label>
+        <label className="filter-check rounded-xl bg-[var(--surface-soft)] p-3">
+          <input type="checkbox" checked={filters.nonVegetarian} onChange={(event) => onChange({ ...filters, nonVegetarian: event.target.checked, vegetarian: false })} />
+          <span>Non-veg kitchens</span>
+        </label>
+      </fieldset>
 
       <fieldset className="filter-fieldset">
         <legend>
           Price per meal{" "}
           <span className="font-normal text-muted-foreground">
-            · up to ₹{filters.maxPrice}
+            · up to ₹{filters.maxPrice.toLocaleString("en-IN")}
           </span>
         </legend>
         <input
           aria-label="Maximum price per meal"
           type="range"
-          min={100}
-          max={300}
-          step={10}
+          min={0}
+          max={10000}
+          step={100}
           value={filters.maxPrice}
           onChange={(event) => update("maxPrice", Number(event.target.value))}
           className="w-full accent-primary"
         />
         <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
-          <span>₹100</span>
-          <span>₹300+</span>
+          <span>₹0</span>
+          <span>₹10,000+</span>
         </div>
       </fieldset>
 

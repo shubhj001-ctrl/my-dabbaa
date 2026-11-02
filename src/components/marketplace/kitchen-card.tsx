@@ -29,6 +29,11 @@ export function KitchenCard({
             {kitchen.badge}
           </span>
         ) : null}
+        {kitchen.isDemo ? (
+          <span className="absolute bottom-3 left-3 rounded-full bg-[#24112f] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#c6ff3d]">
+            Demo listing
+          </span>
+        ) : null}
         {kitchen.isVegetarian ? (
           <span
             className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full bg-white/90 text-primary shadow-sm"
@@ -55,7 +60,7 @@ export function KitchenCard({
               </span>
             </p>
           </div>
-          <Rating value={kitchen.rating} compact />
+          <Rating value={kitchen.rating} count={kitchen.reviewCount} compact />
         </div>
 
         <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-muted-foreground">
@@ -75,8 +80,8 @@ export function KitchenCard({
 
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <div>
-            <p className="text-[11px] text-muted-foreground">Starting at</p>
-            <PriceDisplay amount={kitchen.startingPrice} />
+            <p className="text-[11px] text-muted-foreground">{kitchen.startingPrice ? "Plans from" : "Plans"}</p>
+            {kitchen.startingPrice ? <PriceDisplay amount={kitchen.startingPrice} suffix={kitchen.isDemo ? "meal" : "plan"} /> : <span className="text-xs font-semibold text-foreground">Coming soon</span>}
           </div>
           <Link
             href={`/kitchens/${kitchen.id}`}

@@ -1,4 +1,5 @@
 import { MapPin, Search } from "lucide-react";
+import { CHANDIGARH_SECTORS } from "@/config/marketplace";
 
 type SearchBarProps = {
   compact?: boolean;
@@ -40,14 +41,9 @@ export function SearchBar({
           className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
         >
           <option value="all">All Chandigarh</option>
-          <option value="Sector 8">Sector 8</option>
-          <option value="Sector 15">Sector 15</option>
-          <option value="Sector 17">Sector 17</option>
-          <option value="Sector 22">Sector 22</option>
-          <option value="Sector 34">Sector 34</option>
-          <option value="Sector 35">Sector 35</option>
-          <option value="Sector 44">Sector 44</option>
-          <option value="Sector 46">Sector 46</option>
+          {CHANDIGARH_SECTORS.map((sector) => (
+            <option key={sector} value={`Sector ${sector}`}>Sector {sector}</option>
+          ))}
         </select>
       </label>
 

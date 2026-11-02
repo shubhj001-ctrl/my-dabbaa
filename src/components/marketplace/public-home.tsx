@@ -12,7 +12,10 @@ import { KitchenCard } from "@/components/marketplace/kitchen-card";
 import { KitchenImage } from "@/components/marketplace/kitchen-image";
 import { Navbar } from "@/components/marketplace/navbar";
 import { SearchBar } from "@/components/marketplace/search-bar";
-import { featuredKitchens } from "@/data/mock-data/kitchens";
+import { EmptyState } from "@/components/marketplace/empty-state";
+import type { Kitchen } from "@/types/marketplace";
+
+type HomeDataAvailability = "live" | "demo" | "unavailable" | "error";
 
 const steps = [
   {
@@ -59,7 +62,13 @@ const testimonials = [
   },
 ];
 
-export function PublicHome() {
+export function PublicHome({
+  kitchens,
+  dataAvailability,
+}: {
+  kitchens: Kitchen[];
+  dataAvailability: HomeDataAvailability;
+}) {
   return (
     <>
       <Navbar />
@@ -161,12 +170,21 @@ export function PublicHome() {
                 All kitchens <ArrowRight aria-hidden="true" size={16} />
               </Link>
             </div>
-            <div className="featured-kitchen-grid mt-8">
-              {featuredKitchens.map((kitchen) => (
+            {dataAvailability === "demo" ? <p className="demo-listing-banner">DEMO MODE · SAMPLE KITCHENS, NOT REAL PROVIDERS</p> : null}
+            {kitchens.length ? <div className="featured-kitchen-grid mt-8">
+              {kitchens.slice(0, 4).map((kitchen) => (
                 <KitchenCard key={kitchen.id} kitchen={kitchen} featured />
               ))}
-            </div>
-            <p className="demo-caption">SAMPLE KITCHENS FOR THE VIBE CHECK · NOT LIVE LISTINGS</p>
+            </div> : (
+              <div className="mt-8">
+                <EmptyState
+                  title={dataAvailability === "error" ? "The kitchens are taking a breather." : "Nothing cooking here yet!"}
+                  description={dataAvailability === "error" ? "We couldn't load current listings. Please try again in a moment." : "Be one of the first local legends to list a kitchen in Chandigarh."}
+                  action={{ href: "/register?type=provider", label: "List your kitchen for free" }}
+                />
+              </div>
+            )}
+            {dataAvailability === "demo" ? <p className="demo-caption">Fictional preview listings. Real kitchens appear after Supabase is configured and approved.</p> : null}
           </div>
         </section>
 

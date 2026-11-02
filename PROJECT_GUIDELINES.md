@@ -4,7 +4,7 @@
 
 My Dabbaa is a hyperlocal marketplace connecting customers with independent tiffin providers in Chandigarh, India. The product has three roles: customer, provider, and administrator.
 
-Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side authorization, and the private `profiles` table foundation. Marketplace operations, payment processing, transactional email, and the rest of the product schema are still deferred.
+Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side authorization, and the private `profiles` table foundation. Stage 2 adds provider kitchen applications, admin approval, informational plans and menus, and public discovery of approved listings. Payment processing, transactional email, customer requests, subscriptions, communities, and reviews remain deferred.
 
 ## Business rules
 
@@ -51,9 +51,22 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 
 - Razorpay is reserved for provider activation payments only. Verify payment results server-side; never trust a client-side success callback as proof of payment.
 - Resend is reserved for transactional email.
-- Supabase Auth and the initial profile migration are established in Stage 1. Further PostgreSQL migrations, Storage policies, and Realtime subscriptions will be added in later stages.
+- Stage 2 database objects are defined in `supabase/migrations/20261103000100_kitchen_marketplace.sql`. Apply it after the Stage 1 profile migration.
+- Stage 2 creates a private `kitchen-images` Storage bucket with a 4 MiB per-image limit and JPG, PNG, and WebP allow-list. Uploads are verified by the application route and Storage policies restrict writes to the kitchen owner. Public/administrator previews use signed URLs only after row-level authorization.
+- Kitchen listings remain hidden until an administrator approves them. Provider edits return the listing to draft; the provider must resubmit before it can be publicly listed again.
+- Subscription plans are informational. Customers contact kitchens and arrange food payments and delivery directly; the platform must not process those payments.
+- Supabase Realtime is not required for this stage. Future migrations, Storage buckets, and subscriptions must retain least-privilege RLS.
 - Food subscription payments and provider delivery operations stay outside the platform.
 - Deploy the Next.js application to Vercel after production environment variables and Supabase policies are configured.
+
+## Stage 2 marketplace setup
+
+1. Keep `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_SITE_URL` configured in local `.env.local` and Vercel. No service-role key is used by Stage 2.
+2. Set `SUPABASE_SERVICE_ROLE_KEY` in local `.env.local` and Vercel server environment variables. This key is used only by the authenticated, signature-validating image upload route; never expose it with a `NEXT_PUBLIC_` prefix.
+3. Apply `supabase/migrations/20261103000100_kitchen_marketplace.sql` after `20261102225200_profiles_auth_foundation.sql`, using the Supabase SQL Editor or `npx supabase db push`.
+4. The migration creates the private `kitchen-images` bucket, 4 MiB limit, allowed image MIME types, and Storage RLS policies. Direct browser uploads are denied. The trusted route verifies file signatures and kitchen ownership before uploading with the server-only key. No manual public-bucket setup is needed.
+5. Verify the migration completed, then sign in with an active provider account to register a kitchen. New applications remain private until an authorized administrator approves them at `/admin/kitchens`.
+6. Add the deployed and local origins to Supabase Auth redirect URLs as described in Stage 1. Marketplace reads and normal mutations use the public anon key and rely on RLS. The service-role key is limited to the validated upload route.
 
 ### UX and accessibility
 

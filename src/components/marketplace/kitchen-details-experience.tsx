@@ -20,12 +20,16 @@ import { SubscriptionPlanCard } from "@/components/marketplace/subscription-plan
 import type { Kitchen, SubscriptionPlan } from "@/types/marketplace";
 
 export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
-  const [selectedMenu, setSelectedMenu] = useState<"Lunch" | "Dinner">("Lunch");
+  const [selectedMenu, setSelectedMenu] = useState<"Lunch" | "Dinner" | "Breakfast">(
+    kitchen.menu[0]?.category ?? "Lunch",
+  );
   const [notice, setNotice] = useState("");
 
   function choosePlan(plan: SubscriptionPlan) {
     setNotice(
-      `${plan.name} selected in demo. Contact ${kitchen.name} directly to arrange a subscription.`,
+      kitchen.isDemo
+        ? `${plan.name} selected in demo. Contact ${kitchen.name} directly to arrange a subscription.`
+        : `${plan.name} is informational only. Contact ${kitchen.name} directly to arrange meals and payment.`,
     );
   }
 
@@ -40,6 +44,7 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
           <ArrowLeft aria-hidden="true" size={16} />
           All kitchens
         </Link>
+        {kitchen.isDemo ? <p className="demo-listing-banner mt-3">DEMO PROFILE · THIS IS A FICTIONAL SAMPLE KITCHEN</p> : null}
 
         <section
           aria-label={`${kitchen.name} food gallery`}
@@ -127,7 +132,7 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
                   </h2>
                 </div>
                 <div className="flex rounded-full bg-[#eeefe8] p-1" role="group" aria-label="Select menu">
-                  {(["Lunch", "Dinner"] as const).map((category) => (
+                  {(["Breakfast", "Lunch", "Dinner"] as const).filter((category) => kitchen.menu.some((item) => item.category === category)).map((category) => (
                     <button
                       key={category}
                       type="button"
@@ -152,7 +157,7 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
                       <span className="mt-1 flex size-5 shrink-0 items-center justify-center rounded border border-primary/40 text-primary" aria-label="Vegetarian">
                         <span className="size-2 rounded-full bg-primary" />
                       </span>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-semibold text-foreground">
                           {item.name}
                         </h3>
@@ -160,12 +165,20 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
                           {item.description}
                         </p>
                       </div>
+                      {item.imageUrl ? (
+                        <div className="relative size-16 shrink-0 overflow-hidden rounded-xl border border-border">
+                          <KitchenImage src={item.imageUrl} alt={`${item.name} menu`} />
+                        </div>
+                      ) : null}
                     </article>
                   ))}
+                {!kitchen.menu.some((item) => item.category === selectedMenu) ? (
+                  <p className="py-6 text-sm text-muted-foreground">Nothing posted for this meal yet. Check back soon.</p>
+                ) : null}
               </div>
               <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock3 aria-hidden="true" size={13} />
-                Menu is a sample and may vary by day.
+                {kitchen.isDemo ? "Sample menu; the real menu may vary by day." : "Menu may vary by day. Contact the kitchen to confirm availability."}
               </p>
             </section>
 
@@ -179,10 +192,8 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
                 </div>
                 <Rating value={kitchen.rating} count={kitchen.reviewCount} />
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Fictional sample reviews for preview only.
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {kitchen.isDemo ? <p className="mt-2 text-xs text-muted-foreground">Fictional sample reviews for preview only.</p> : null}
+              {kitchen.reviews.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {kitchen.reviews.map((review) => (
                   <figure key={review.id} className="review-card rounded-2xl border border-border bg-card p-5">
                     <Rating value={review.rating} />
@@ -204,7 +215,7 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
                     </figcaption>
                   </figure>
                 ))}
-              </div>
+              </div> : <p className="mt-4 rounded-xl bg-[#f0eaff] px-4 py-4 text-sm">No ratings yet. Your first meal could be the first review.</p>}
             </section>
           </div>
 
@@ -223,37 +234,40 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 Explore the menu and choose a meal routine that suits you.
               </p>
-              <button
-                type="button"
-                onClick={() =>
-                  setNotice(
-                    `Demo only: get in touch with ${kitchen.name} directly to discuss a meal plan.`,
-                  )
-                }
-                className="choose-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-[#173c30] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                Choose this provider
-                <ArrowRight aria-hidden="true" size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setNotice(
-                    "Contact is a preview interaction. Provider contact details will be available in a later stage.",
-                  )
-                }
-                className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                <MessageCircle aria-hidden="true" size={16} />
-                Contact provider
-              </button>
+              {kitchen.isDemo || !kitchen.contactPhone ? (
+                <button
+                  type="button"
+                  onClick={() => setNotice(`Demo only: get in touch with ${kitchen.name} directly to discuss a meal plan.`)}
+                  className="choose-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-[#173c30] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  Choose this kitchen <ArrowRight aria-hidden="true" size={16} />
+                </button>
+              ) : (
+                <a href={`tel:${kitchen.contactPhone.replace(/[^\d+]/g, "")}`} className="choose-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground">
+                  Call to choose this kitchen <ArrowRight aria-hidden="true" size={16} />
+                </a>
+              )}
+              {kitchen.contactPhone ? (
+                <a href={`tel:${kitchen.contactPhone.replace(/[^\d+]/g, "")}`} className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-secondary">
+                  <MessageCircle aria-hidden="true" size={16} /> Contact provider
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setNotice("Contact is a preview interaction. Provider contact details will be available on a real listing.")}
+                  className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-secondary"
+                >
+                  <MessageCircle aria-hidden="true" size={16} /> Contact provider
+                </button>
+              )}
+              {kitchen.contactEmail ? <a href={`mailto:${kitchen.contactEmail}`} className="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-full text-sm font-bold text-foreground hover:bg-secondary">Email the kitchen</a> : null}
               {notice ? (
                 <p className="mt-3 rounded-xl bg-accent px-3 py-2.5 text-xs leading-5 text-primary" role="status" aria-live="polite">
                   {notice}
                 </p>
               ) : null}
               <p className="mt-4 text-center text-[11px] leading-5 text-muted-foreground">
-                Sample profile. No request or payment is submitted.
+                {kitchen.isDemo ? "Sample profile. No request or payment is submitted." : "Plans are informational only. Arrange meals and payment directly with the kitchen."}
               </p>
             </section>
           </aside>

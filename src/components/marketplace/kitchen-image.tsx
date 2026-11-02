@@ -16,7 +16,7 @@ export function KitchenImage({
   className = "",
   priority = false,
 }: KitchenImageProps) {
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(!src);
 
   if (failed) {
     return (

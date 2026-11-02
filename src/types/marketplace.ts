@@ -1,4 +1,4 @@
-export type MealType = "North Indian" | "Punjabi" | "Gujarati" | "South Indian";
+export type MealType = string;
 
 export type MenuItem = {
   id: string;
@@ -6,6 +6,7 @@ export type MenuItem = {
   description: string;
   category: "Lunch" | "Dinner" | "Breakfast";
   isVegetarian: boolean;
+  imageUrl?: string;
 };
 
 export type SubscriptionPlan = {
@@ -16,6 +17,8 @@ export type SubscriptionPlan = {
   price: number;
   description: string;
   popular?: boolean;
+  mealType?: "breakfast" | "lunch" | "dinner";
+  isVegetarian?: boolean;
 };
 
 export type Review = {
@@ -29,6 +32,8 @@ export type Review = {
 
 export type Kitchen = {
   id: string;
+  databaseId?: string;
+  slug?: string;
   name: string;
   tagline: string;
   description: string;
@@ -46,6 +51,11 @@ export type Kitchen = {
   menu: MenuItem[];
   plans: SubscriptionPlan[];
   reviews: Review[];
+  mealCategories?: ("Breakfast" | "Lunch" | "Dinner")[];
+  foodType?: "vegetarian" | "non_vegetarian" | "both";
+  contactPhone?: string;
+  contactEmail?: string;
+  isDemo?: boolean;
 };
 
 export type Customer = {
