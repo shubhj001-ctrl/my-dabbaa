@@ -109,6 +109,48 @@ export type MenuPostRow = {
   updated_at: string;
 };
 
+export type CustomerRequestStatus =
+  | "pending"
+  | "accepted"
+  | "rejected"
+  | "withdrawn"
+  | "expired";
+
+export type CustomerRequestRow = {
+  id: string;
+  customer_id: string;
+  kitchen_id: string;
+  preferred_meal: string;
+  preferred_start_date: string;
+  message: string | null;
+  consent_given: boolean;
+  status: CustomerRequestStatus;
+  accepted_at: string | null;
+  rejected_at: string | null;
+  withdrawn_at: string | null;
+  customer_name: string;
+  kitchen_name: string;
+  kitchen_photo_path: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotificationRow = {
+  id: string;
+  recipient_id: string;
+  request_id: string | null;
+  notification_type:
+    | "request_submitted"
+    | "request_received"
+    | "request_accepted"
+    | "request_rejected"
+    | "request_withdrawn";
+  title: string;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+};
+
 type KitchenInsert = Omit<
   KitchenRow,
   | "id"
@@ -161,6 +203,16 @@ export type Database = {
         Omit<MenuPostRow, "id" | "created_at" | "updated_at"> &
           Partial<Pick<MenuPostRow, "id" | "created_at" | "updated_at">>
       >;
+      customer_requests: Table<
+        CustomerRequestRow,
+        Omit<CustomerRequestRow, "id" | "created_at" | "updated_at"> &
+          Partial<Pick<CustomerRequestRow, "id" | "created_at" | "updated_at">>
+      >;
+      notifications: Table<
+        NotificationRow,
+        Omit<NotificationRow, "id" | "created_at"> &
+          Partial<Pick<NotificationRow, "id" | "created_at">>
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -177,6 +229,24 @@ export type Database = {
           p_decision: KitchenApprovalStatus;
           p_reason?: string | null;
         };
+        Returns: undefined;
+      };
+      submit_customer_request: {
+        Args: {
+          p_kitchen_id: string;
+          p_preferred_meal: string;
+          p_preferred_start_date: string;
+          p_message: string | null;
+          p_consent_given: boolean;
+        };
+        Returns: string;
+      };
+      withdraw_customer_request: {
+        Args: { p_request_id: string };
+        Returns: undefined;
+      };
+      respond_to_customer_request: {
+        Args: { p_request_id: string; p_decision: string };
         Returns: undefined;
       };
     };

@@ -13,6 +13,7 @@ import { KitchenImage } from "@/components/marketplace/kitchen-image";
 import { Navbar } from "@/components/marketplace/navbar";
 import { SearchBar } from "@/components/marketplace/search-bar";
 import { EmptyState } from "@/components/marketplace/empty-state";
+import { DabbaStory } from "@/components/marketplace/dabba-story";
 import type { Kitchen } from "@/types/marketplace";
 
 type HomeDataAvailability = "live" | "demo" | "unavailable" | "error";
@@ -187,6 +188,8 @@ export function PublicHome({
             {dataAvailability === "demo" ? <p className="demo-caption">Fictional preview listings. Real kitchens appear after Supabase is configured and approved.</p> : null}
           </div>
         </section>
+
+        <DabbaStory />
 
         <section id="how-it-works" className="how-section">
           <div className="page-container">

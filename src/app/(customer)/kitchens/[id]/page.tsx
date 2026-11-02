@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { KitchenDetailsExperience } from "@/components/marketplace/kitchen-details-experience";
 import { kitchens } from "@/data/mock-data/kitchens";
 import { getPublicKitchenBySlug } from "@/services/marketplace/queries";
+import { getCurrentProfile } from "@/lib/auth";
 
 export default function KitchenPage({
   params,
@@ -37,7 +38,13 @@ async function KitchenPageContent({
       </div>
     );
   }
-  return <KitchenDetailsExperience kitchen={kitchen} />;
+  const profile = await getCurrentProfile();
+  return (
+    <KitchenDetailsExperience
+      kitchen={kitchen}
+      userRole={profile?.is_active ? profile.role : null}
+    />
+  );
 }
 
 export async function generateMetadata({

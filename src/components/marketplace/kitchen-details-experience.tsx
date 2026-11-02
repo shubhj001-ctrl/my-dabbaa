@@ -12,14 +12,22 @@ import {
   Sprout,
 } from "lucide-react";
 import { Footer } from "@/components/marketplace/footer";
+import { CustomerRequestForm } from "@/components/marketplace/customer-request-form";
 import { KitchenImage } from "@/components/marketplace/kitchen-image";
 import { Navbar } from "@/components/marketplace/navbar";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { Rating } from "@/components/marketplace/rating";
 import { SubscriptionPlanCard } from "@/components/marketplace/subscription-plan-card";
 import type { Kitchen, SubscriptionPlan } from "@/types/marketplace";
+import type { AppRole } from "@/types/navigation";
 
-export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
+export function KitchenDetailsExperience({
+  kitchen,
+  userRole,
+}: {
+  kitchen: Kitchen;
+  userRole: AppRole | null;
+}) {
   const [selectedMenu, setSelectedMenu] = useState<"Lunch" | "Dinner" | "Breakfast">(
     kitchen.menu[0]?.category ?? "Lunch",
   );
@@ -234,18 +242,30 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 Explore the menu and choose a meal routine that suits you.
               </p>
-              {kitchen.isDemo || !kitchen.contactPhone ? (
+              {kitchen.isDemo ? (
                 <button
                   type="button"
-                  onClick={() => setNotice(`Demo only: get in touch with ${kitchen.name} directly to discuss a meal plan.`)}
+                  onClick={() => setNotice(`Demo only: requests are disabled for sample kitchens like ${kitchen.name}.`)}
                   className="choose-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-[#173c30] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   Choose this kitchen <ArrowRight aria-hidden="true" size={16} />
                 </button>
+              ) : userRole === "customer" && kitchen.databaseId ? (
+                <CustomerRequestForm kitchenId={kitchen.databaseId} kitchenName={kitchen.name} />
+              ) : userRole === null ? (
+                <Link
+                  href={`/login?next=${encodeURIComponent("/requests")}`}
+                  className="choose-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-[#3a1c4a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  Sign in to choose this kitchen <ArrowRight aria-hidden="true" size={16} />
+                </Link>
               ) : (
-                <a href={`tel:${kitchen.contactPhone.replace(/[^\d+]/g, "")}`} className="choose-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground">
-                  Call to choose this kitchen <ArrowRight aria-hidden="true" size={16} />
-                </a>
+                <Link
+                  href="/register?type=customer"
+                  className="choose-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-[#3a1c4a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  Choose with a customer account <ArrowRight aria-hidden="true" size={16} />
+                </Link>
               )}
               {kitchen.contactPhone ? (
                 <a href={`tel:${kitchen.contactPhone.replace(/[^\d+]/g, "")}`} className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-secondary">
@@ -267,7 +287,7 @@ export function KitchenDetailsExperience({ kitchen }: { kitchen: Kitchen }) {
                 </p>
               ) : null}
               <p className="mt-4 text-center text-[11px] leading-5 text-muted-foreground">
-                {kitchen.isDemo ? "Sample profile. No request or payment is submitted." : "Plans are informational only. Arrange meals and payment directly with the kitchen."}
+                {kitchen.isDemo ? "Sample profile. No request or payment is submitted." : "Requests are free. Acceptance awaits activation; no payment is collected here."}
               </p>
             </section>
           </aside>

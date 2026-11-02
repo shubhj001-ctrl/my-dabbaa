@@ -4,7 +4,7 @@
 
 My Dabbaa is a hyperlocal marketplace connecting customers with independent tiffin providers in Chandigarh, India. The product has three roles: customer, provider, and administrator.
 
-Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side authorization, and the private `profiles` table foundation. Stage 2 adds provider kitchen applications, admin approval, informational plans and menus, and public discovery of approved listings. Payment processing, transactional email, customer requests, subscriptions, communities, and reviews remain deferred.
+Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side authorization, and the private `profiles` table foundation. Stage 2 adds provider kitchen applications, admin approval, informational plans and menus, and public discovery of approved listings. Stage 3 adds customer enquiries, provider responses, in-app notifications, and the homepage tiffin scroll story. Activation payments, transactional email, food subscriptions, communities, and reviews remain deferred.
 
 ## Business rules
 
@@ -16,6 +16,9 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 - Customers may contact providers by phone and submit a request to join a provider's service.
 - Before a provider activation is complete, providers may see only the customer's name and request details the customer has authorized.
 - A provider accepts a request before paying the one-time ₹199 activation fee.
+- Provider acceptance is free and does not activate a customer, create a subscription, collect payment, or reveal customer phone/email. Accepted enquiries remain awaiting activation.
+- Customer requests require consent, are limited to one pending or accepted request per kitchen/customer, and may be withdrawn only while pending.
+- Providers see a trusted customer-name snapshot and only the authorized request details; profile phone and email remain protected until a future successful activation flow.
 - A successful activation unlocks only the full customer profile details that the customer authorized.
 - The activation fee applies once per unique customer-and-kitchen pair. A repeat activation for the same pair must be idempotent and must not create another fee.
 - The activation payment is paid by the provider; customers do not pay this platform fee.
@@ -50,13 +53,16 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 ### Integrations deferred to later stages
 
 - Razorpay is reserved for provider activation payments only. Verify payment results server-side; never trust a client-side success callback as proof of payment.
-- Resend is reserved for transactional email.
+- Resend is reserved for transactional email and is not required for Stage 3; request notifications are in-app only.
 - Stage 2 database objects are defined in `supabase/migrations/20261103000100_kitchen_marketplace.sql`. Apply it after the Stage 1 profile migration.
+- Stage 3 request and in-app notification objects are defined in `supabase/migrations/20261103000200_customer_requests.sql`. Apply after the Stage 2 kitchen marketplace migration.
 - Stage 2 creates a private `kitchen-images` Storage bucket with a 4 MiB per-image limit and JPG, PNG, and WebP allow-list. Uploads are verified by the application route and Storage policies restrict writes to the kitchen owner. Public/administrator previews use signed URLs only after row-level authorization.
 - Kitchen listings remain hidden until an administrator approves them. Provider edits return the listing to draft; the provider must resubmit before it can be publicly listed again.
 - Subscription plans are informational. Customers contact kitchens and arrange food payments and delivery directly; the platform must not process those payments.
 - Supabase Realtime is not required for this stage. Future migrations, Storage buckets, and subscriptions must retain least-privilege RLS.
 - Food subscription payments and provider delivery operations stay outside the platform.
+- Request submission, withdrawal, acceptance, and rejection are performed by narrowly scoped authenticated database RPCs. RLS exposes request rows only to the customer, the owning kitchen provider, and trusted administrators. Profile contact fields are never joined into provider request reads.
+- The homepage tiffin story uses CSS view-timeline scroll animation where supported and shows a complete static illustration otherwise. Reduced-motion preferences disable the motion and retain the full composition.
 - Deploy the Next.js application to Vercel after production environment variables and Supabase policies are configured.
 
 ## Stage 2 marketplace setup
