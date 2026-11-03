@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getCurrentProfile } from "@/lib/auth";
 import { createRazorpayClient } from "@/lib/razorpay/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  createAdminClient,
+  isSupabaseServiceRoleConfigured,
+} from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const requestSchema = z.object({
@@ -33,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const claimToken = randomUUID();
+  let claimToken = randomUUID();
   const { data: reservations, error: reserveError } = await supabase.rpc(
     "reserve_activation_payment",
     { p_request_id: parsed.data.requestId, p_claim_token: claimToken },
@@ -48,16 +51,114 @@ export async function POST(request: Request) {
     );
   }
 
-  const reservation = reservations[0];
+  let reservation = reservations[0];
   if (reservation.razorpay_order_id) {
-    return NextResponse.json({
-      paymentId: reservation.payment_id,
-      orderId: reservation.razorpay_order_id,
-      amount: 19900,
-      currency: "INR",
-      keyId: razorpay.keyId,
-      status: reservation.payment_status,
-    });
+    try {
+      const [order, payments] = await Promise.all([
+        razorpay.client.orders.fetch(reservation.razorpay_order_id),
+        razorpay.client.orders.fetchPayments(reservation.razorpay_order_id),
+      ]);
+      const paymentRecordsMatchOrder = payments.items.every((payment) =>
+        payment.order_id === reservation.razorpay_order_id &&
+        payment.amount === 19900 &&
+        payment.currency === "INR",
+      );
+
+      if (!paymentRecordsMatchOrder) {
+        console.error("Razorpay order contains payment details that require review.");
+        return NextResponse.json(
+          {
+            error: "We couldn't verify the existing payment attempt. Don't try another payment; contact support.",
+            paymentId: reservation.payment_id,
+            status: "verification_required",
+          },
+          { status: 409 },
+        );
+      }
+
+      if (order.status === "paid" || payments.items.some((payment) => payment.status === "captured")) {
+        return NextResponse.json(
+          {
+            error: "Payment was received and is awaiting verified activation. Don't pay again; refresh the request shortly.",
+            paymentId: reservation.payment_id,
+            status: "captured_waiting_for_webhook",
+          },
+          { status: 409 },
+        );
+      }
+
+      const allAttemptsFailed = payments.items.length > 0 &&
+        payments.items.every((payment) => payment.status === "failed");
+      if (allAttemptsFailed) {
+        if (!isSupabaseServiceRoleConfigured()) {
+          return NextResponse.json(
+            { error: "A retry is not available until payment status is recorded." },
+            { status: 503 },
+          );
+        }
+
+        const adminSupabase = createAdminClient();
+        const { data: failureResult, error: failureError } = await adminSupabase.rpc(
+          "fail_activation_payment",
+          {
+            p_razorpay_order_id: reservation.razorpay_order_id,
+            p_amount_paise: 19900,
+            p_currency: "INR",
+          },
+        );
+        if (failureError || failureResult !== "failed") {
+          console.error(
+            "Unable to record failed Razorpay attempts:",
+            failureError?.code ?? failureResult,
+          );
+          return NextResponse.json(
+            { error: "We couldn't safely prepare a retry. Please check the payment status again." },
+            { status: 503 },
+          );
+        }
+
+        claimToken = randomUUID();
+        const retryReservation = await supabase.rpc("reserve_activation_payment", {
+          p_request_id: parsed.data.requestId,
+          p_claim_token: claimToken,
+        });
+        if (retryReservation.error || !retryReservation.data?.length) {
+          console.error("Unable to reserve a new activation attempt:", retryReservation.error?.code);
+          return NextResponse.json(
+            { error: "We couldn't prepare a fresh payment attempt. Please try again." },
+            { status: 503 },
+          );
+        }
+        reservation = retryReservation.data[0];
+      } else if (order.status !== "created" || payments.items.length > 0) {
+        return NextResponse.json(
+          {
+            error: "The current payment attempt is still being processed. Check its status before trying again.",
+            paymentId: reservation.payment_id,
+            status: "payment_processing",
+          },
+          { status: 409 },
+        );
+      } else {
+        return NextResponse.json({
+          paymentId: reservation.payment_id,
+          orderId: reservation.razorpay_order_id,
+          amount: 19900,
+          currency: "INR",
+          keyId: razorpay.keyId,
+          status: reservation.payment_status,
+        });
+      }
+    } catch (error) {
+      console.error(
+        "Unable to verify an existing Razorpay order:",
+        error instanceof Error ? error.name : "UnknownError",
+      );
+      return NextResponse.json(
+        { error: "We couldn't verify the previous payment attempt. Check its status before trying again." },
+        { status: 502 },
+      );
+    }
   }
 
   if (!reservation.should_create_order) {
