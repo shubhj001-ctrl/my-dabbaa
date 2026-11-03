@@ -5,7 +5,10 @@ import { CalendarDays, Check, Clock3, MapPin, X } from "lucide-react";
 import { KitchenImage } from "@/components/marketplace/kitchen-image";
 import { ActivationPaymentButton } from "@/components/provider/activation-payment-button";
 import Link from "next/link";
-import { respondToCustomerRequestAction } from "@/services/marketplace/request-actions";
+import {
+  declineAcceptedCustomerRequestAction,
+  respondToCustomerRequestAction,
+} from "@/services/marketplace/request-actions";
 import type { RequestListItem } from "@/services/marketplace/request-queries";
 import type { CustomerRequestStatus } from "@/types/supabase";
 
@@ -46,6 +49,34 @@ export function ProviderRequestsList({ requests }: { requests: RequestListItem[]
                 status: decision,
                 accepted_at: decision === "accepted" ? timestamp : null,
                 rejected_at: decision === "rejected" ? timestamp : null,
+              }
+            : request,
+        ),
+      );
+    });
+  }
+
+  function declineAccepted(requestId: string) {
+    if (!window.confirm("Decline this lead? The customer can send a new request to your kitchen.")) {
+      return;
+    }
+
+    setNotice("");
+    startTransition(async () => {
+      const result = await declineAcceptedCustomerRequestAction({ requestId });
+      if (!result.success) {
+        setNotice(result.message);
+        return;
+      }
+      const timestamp = new Date().toISOString();
+      setItems((current) =>
+        current.map((request) =>
+          request.id === requestId
+            ? {
+                ...request,
+                status: "rejected",
+                accepted_at: null,
+                rejected_at: timestamp,
               }
             : request,
         ),
@@ -97,6 +128,16 @@ export function ProviderRequestsList({ requests }: { requests: RequestListItem[]
             ) : null}
             {request.status === "accepted" && !request.activated_at && request.contact_sharing_consent ? (
               <ActivationPaymentButton requestId={request.id} />
+            ) : null}
+            {request.status === "accepted" && !request.activated_at ? (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => declineAccepted(request.id)}
+                className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm font-bold hover:bg-white disabled:opacity-60"
+              >
+                <X size={15} /> Decline lead
+              </button>
             ) : null}
             {request.status === "pending" ? (
               <div className="mt-4 flex flex-wrap gap-2">

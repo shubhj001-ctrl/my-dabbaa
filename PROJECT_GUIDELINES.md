@@ -18,6 +18,7 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 - A provider accepts a request before paying the one-time ₹199 activation fee.
 - Provider acceptance is free and does not activate a customer, create a subscription, collect payment, or reveal customer phone/email. Accepted enquiries remain awaiting activation until Razorpay confirms a captured payment through a signed webhook.
 - Customer requests require consent, are limited to one pending or accepted request per kitchen/customer, and may be withdrawn only while pending.
+- Providers may decline a pending or accepted, unactivated request. An accepted request can be declined only before an activation payment is created or remains in progress; a pending or successful payment must be reconciled first. Rejection releases the active-request constraint so the customer can submit another request.
 - Request consent explicitly authorizes sharing the customer's full name, email, and phone with that selected kitchen only after verified activation. Legacy accepted requests without this recorded consent require a customer opt-in before payment can begin.
 - Providers see a trusted customer-name snapshot and only the authorized request details; profile phone and email remain protected until verified activation.
 - A successful activation unlocks only the full customer profile details that the customer authorized, and only to the provider who owns the activated kitchen.

@@ -320,6 +320,10 @@ export type Database = {
         Args: { p_request_id: string; p_decision: string };
         Returns: undefined;
       };
+      decline_accepted_customer_request: {
+        Args: { p_request_id: string };
+        Returns: undefined;
+      };
       reserve_activation_payment: {
         Args: { p_request_id: string; p_claim_token: string };
         Returns: {

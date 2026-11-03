@@ -13,7 +13,7 @@ import type { CustomerRequestStatus } from "@/types/supabase";
 const statusCopy: Record<CustomerRequestStatus, { title: string; detail: string }> = {
   pending: { title: "Waiting on the kitchen", detail: "They’ll review your request and get back to you here." },
   accepted: { title: "Accepted · awaiting activation", detail: "The kitchen is interested. The provider will pay the one-time activation fee; no food payment or subscription is created here." },
-  rejected: { title: "Not available right now", detail: "This kitchen couldn’t take on the request. Your next food obsession might be elsewhere." },
+  rejected: { title: "Request declined", detail: "This kitchen can’t take on the request right now. You can send a new request to this kitchen later or explore another kitchen." },
   withdrawn: { title: "Request withdrawn", detail: "This request is closed. You can send a new one if your plans change." },
   expired: { title: "Request expired", detail: "This request is no longer active. Explore kitchens to find another match." },
 };

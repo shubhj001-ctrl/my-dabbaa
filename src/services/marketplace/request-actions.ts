@@ -157,3 +157,35 @@ export async function respondToCustomerRequestAction(
   revalidatePath("/provider/dashboard");
   return { success: true };
 }
+
+export async function declineAcceptedCustomerRequestAction(
+  input: unknown,
+): Promise<RequestActionResult> {
+  const parsed = withdrawRequestSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: "That request could not be found." };
+  }
+
+  const [user, profile] = await Promise.all([getCurrentUser(), getCurrentProfile()]);
+  if (!user || !profile || profile.role !== "provider" || !profile.is_active) {
+    return { success: false, message: "Sign in with an active provider account to continue." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("decline_accepted_customer_request", {
+    p_request_id: parsed.data.requestId,
+  });
+  if (error) {
+    return {
+      success: false,
+      message: error.message.includes("activation payment")
+        ? "This lead can't be declined while payment is in progress or has been received. Check the payment status; contact support if it remains pending."
+        : "This accepted request could not be declined. Refresh and try again.",
+    };
+  }
+
+  revalidatePath("/provider/requests");
+  revalidatePath("/requests");
+  revalidatePath("/provider/dashboard");
+  return { success: true };
+}
