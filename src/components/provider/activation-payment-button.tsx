@@ -44,24 +44,42 @@ export function ActivationPaymentButton({ requestId }: { requestId: string }) {
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function checkStatus(paymentId: string, waitBeforeFirstCheck = true) {
+  async function checkStatus(
+    paymentId: string,
+    pollUntilSettled = true,
+    waitBeforeFirstCheck = true,
+  ) {
     setCheckingStatus(true);
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      if (waitBeforeFirstCheck || attempt > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, 2500));
-      }
-      try {
-        const response = await fetch(`/api/provider/activation-orders/${paymentId}`, {
-          cache: "no-store",
-        });
-        if (!response.ok) continue;
+    try {
+      const attempts = pollUntilSettled ? 8 : 1;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        if (waitBeforeFirstCheck || attempt > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2500));
+        }
+
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 10000);
+        let response: Response;
+        try {
+          response = await fetch(`/api/provider/activation-orders/${paymentId}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+        } finally {
+          window.clearTimeout(timeout);
+        }
+
+        if (!response.ok) {
+          const result = (await response.json().catch(() => null)) as { error?: string } | null;
+          setMessage(result?.error ?? "We couldn't check payment status. Please try again.");
+          return;
+        }
 
         const status = (await response.json()) as { status: string; gatewayStatus?: string };
         if (status.status === "success") {
           setPaymentBlocked(true);
           setMessage("Payment verified. This customer is now activated.");
           router.refresh();
-          setCheckingStatus(false);
           return;
         }
         if (status.status === "failed") {
@@ -69,7 +87,6 @@ export function ActivationPaymentButton({ requestId }: { requestId: string }) {
           setPaymentId(null);
           setMessage("Payment failed. You can safely retry the activation fee.");
           router.refresh();
-          setCheckingStatus(false);
           return;
         }
         if (status.gatewayStatus?.startsWith("captured")) {
@@ -80,17 +97,26 @@ export function ActivationPaymentButton({ requestId }: { requestId: string }) {
               : "Payment received. Activation is awaiting Razorpay's verified confirmation; don't pay again.",
           );
           router.refresh();
-          setCheckingStatus(false);
           return;
         }
-      } catch {
-        continue;
-      }
-    }
 
-    setMessage("Payment status is still being confirmed. Check its status before trying again.");
-    router.refresh();
-    setCheckingStatus(false);
+        if (!pollUntilSettled) {
+          setMessage("Razorpay has not confirmed the payment yet. Don't pay again while its status is uncertain.");
+          return;
+        }
+      }
+
+      setMessage("Payment confirmation is still pending. Check its status again shortly; don't start another payment.");
+      router.refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof DOMException && error.name === "AbortError"
+          ? "The status check timed out. Please try checking again; don't pay again while status is uncertain."
+          : "We couldn't reach the payment status service. Please try again; don't pay again while status is uncertain.",
+      );
+    } finally {
+      setCheckingStatus(false);
+    }
   }
 
   async function startPayment() {
@@ -104,7 +130,11 @@ export function ActivationPaymentButton({ requestId }: { requestId: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ requestId }),
       });
-      const body = (await response.json()) as OrderResponse & { error?: string; pending?: boolean };
+      const body = (await response.json()) as OrderResponse & {
+        error?: string;
+        message?: string;
+        pending?: boolean;
+      };
       if (body.paymentId) setPaymentId(body.paymentId);
       if (!response.ok) {
         setMessage(body.error ?? "We couldn’t prepare the activation payment.");
@@ -112,14 +142,21 @@ export function ActivationPaymentButton({ requestId }: { requestId: string }) {
         if (body.paymentId) {
           setPaymentBlocked(true);
           if (body.status === "captured_waiting_for_webhook" || body.status === "payment_processing") {
-            void checkStatus(body.paymentId);
+            void checkStatus(body.paymentId, false, false);
           }
         }
         return;
       }
       if (!body.orderId) {
-        setMessage(body.error ?? "The order is being prepared. Check again in a moment.");
+        setMessage(body.message ?? body.error ?? "The order is being prepared. Check again in a moment.");
         setBusy(false);
+        if (
+          body.paymentId &&
+          (body.status === "captured_waiting_for_webhook" || body.status === "payment_processing")
+        ) {
+          setPaymentBlocked(true);
+          void checkStatus(body.paymentId, false, false);
+        }
         return;
       }
       if (!body.paymentId || !body.keyId || !body.amount || !body.currency || !window.Razorpay) {
@@ -180,7 +217,7 @@ export function ActivationPaymentButton({ requestId }: { requestId: string }) {
         <button
           type="button"
           disabled={checkingStatus}
-          onClick={() => void checkStatus(paymentId, false)}
+          onClick={() => void checkStatus(paymentId, false, false)}
           className="mt-2 text-xs font-medium text-foreground underline underline-offset-4 disabled:opacity-60"
         >
           {checkingStatus ? "Checking payment status…" : "Check payment status"}

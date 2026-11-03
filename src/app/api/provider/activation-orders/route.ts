@@ -77,14 +77,11 @@ export async function POST(request: Request) {
       }
 
       if (order.status === "paid" || payments.items.some((payment) => payment.status === "captured")) {
-        return NextResponse.json(
-          {
-            error: "Payment was received and is awaiting verified activation. Don't pay again; refresh the request shortly.",
-            paymentId: reservation.payment_id,
-            status: "captured_waiting_for_webhook",
-          },
-          { status: 409 },
-        );
+        return NextResponse.json({
+          message: "Payment was received and is awaiting verified activation. Don't pay again; refresh the request shortly.",
+          paymentId: reservation.payment_id,
+          status: "captured_waiting_for_webhook",
+        });
       }
 
       const allAttemptsFailed = payments.items.length > 0 &&
@@ -131,14 +128,11 @@ export async function POST(request: Request) {
         }
         reservation = retryReservation.data[0];
       } else if (order.status !== "created" || payments.items.length > 0) {
-        return NextResponse.json(
-          {
-            error: "The current payment attempt is still being processed. Check its status before trying again.",
-            paymentId: reservation.payment_id,
-            status: "payment_processing",
-          },
-          { status: 409 },
-        );
+        return NextResponse.json({
+          message: "The current payment attempt is still being processed. Check its status before trying again.",
+          paymentId: reservation.payment_id,
+          status: "payment_processing",
+        });
       } else {
         return NextResponse.json({
           paymentId: reservation.payment_id,
