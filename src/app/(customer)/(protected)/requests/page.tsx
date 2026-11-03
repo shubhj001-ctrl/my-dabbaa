@@ -18,7 +18,12 @@ export default async function RequestsPage() {
       ) : (
         <>
           <InAppNotifications notifications={result.notifications} />
-          <CustomerRequestsList requests={result.requests} />
+          <CustomerRequestsList
+            key={result.requests
+              .map((request) => `${request.id}:${request.status}:${request.activated_at ?? ""}:${request.contact_sharing_consent}`)
+              .join("|")}
+            requests={result.requests}
+          />
         </>
       )}
     </div>

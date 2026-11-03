@@ -18,7 +18,12 @@ export default async function ProviderRequestsPage() {
       ) : (
         <>
           <InAppNotifications notifications={result.notifications} />
-          <ProviderRequestsList requests={result.requests} />
+          <ProviderRequestsList
+            key={result.requests
+              .map((request) => `${request.id}:${request.status}:${request.activated_at ?? ""}:${request.contact_sharing_consent}`)
+              .join("|")}
+            requests={result.requests}
+          />
         </>
       )}
     </div>
