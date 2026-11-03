@@ -15,6 +15,40 @@ type ActionResult =
   | { success: true; kitchenId?: string }
   | { success: false; message: string; fieldErrors?: Record<string, string[]> };
 
+function logKitchenSaveFailure(stage: string, error: unknown) {
+  const details =
+    typeof error === "object" && error !== null
+      ? error
+      : undefined;
+  const code =
+    typeof details === "object" &&
+    details &&
+    "code" in details &&
+    typeof details.code === "string"
+      ? details.code
+      : undefined;
+  const name = error instanceof Error ? error.name : "DatabaseError";
+
+  console.error("[kitchen.save] operation failed", {
+    stage,
+    name,
+    ...(code ? { code } : {}),
+  });
+}
+
+function kitchenSaveErrorMessage(error: { code?: string }) {
+  if (error.code === "42501") {
+    return "Your account can't edit this kitchen. Sign in with the provider account that owns the listing.";
+  }
+  if (error.code === "23514") {
+    return "One or more kitchen details aren't accepted. Check the contact information, sector, and opening hours.";
+  }
+  if (error.code === "23505") {
+    return "A kitchen listing with one of these details already exists. Please review the kitchen name and try again.";
+  }
+  return "We couldn't save the listing. Please retry. If it continues, share the error code from your Vercel function logs with support.";
+}
+
 async function getProviderContext() {
   const [user, profile] = await Promise.all([getCurrentUser(), getCurrentProfile()]);
   if (!user || !profile || profile.role !== "provider" || !profile.is_active) {
@@ -62,6 +96,7 @@ export async function saveKitchenDraftAction(
     : { data: null, error: null };
 
   if (existingError || (data.id && !existing)) {
+    if (existingError) logKitchenSaveFailure("find_existing_kitchen", existingError);
     return { success: false, message: "We couldn't find a kitchen listing you can edit." };
   }
 
@@ -102,9 +137,12 @@ export async function saveKitchenDraftAction(
         .single();
 
   if (result.error || !result.data) {
+    if (result.error) logKitchenSaveFailure("save_kitchen_row", result.error);
     return {
       success: false,
-      message: "We couldn't save the listing. Please check the details and try again.",
+      message: result.error
+        ? kitchenSaveErrorMessage(result.error)
+        : "We couldn't save the listing. Please retry.",
     };
   }
 
