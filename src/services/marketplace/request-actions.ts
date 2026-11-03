@@ -176,11 +176,25 @@ export async function declineAcceptedCustomerRequestAction(
     p_request_id: parsed.data.requestId,
   });
   if (error) {
+    if (error.code === "PGRST202" || error.code === "42883") {
+      console.error("Accepted-request decline RPC is unavailable:", error.code);
+      return {
+        success: false,
+        message: "The database update for declining leads is not installed yet. Run `npx supabase db push`, then refresh and try again.",
+      };
+    }
+
+    if (error.message.includes("activation payment")) {
+      return {
+        success: false,
+        message: "This lead can't be declined while an activation payment is in progress or has been received. Check payment status and don't pay again; contact support if it remains pending.",
+      };
+    }
+
+    console.error("Accepted customer request decline failed:", error.code);
     return {
       success: false,
-      message: error.message.includes("activation payment")
-        ? "This lead can't be declined while payment is in progress or has been received. Check the payment status; contact support if it remains pending."
-        : "This accepted request could not be declined. Refresh and try again.",
+      message: "This accepted request couldn't be declined. It may have changed status, may already be activated, or may not belong to your kitchen. Refresh and try again.",
     };
   }
 
