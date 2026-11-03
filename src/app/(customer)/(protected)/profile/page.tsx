@@ -1,12 +1,17 @@
-import { PlaceholderPage } from "@/components/layout/placeholder-page";
+import { CustomerProfileForm } from "@/components/marketplace/customer-profile-form";
+import { requireRole } from "@/lib/auth";
 
-export default function ProfilePage() {
+export default async function ProfilePage() {
+  const profile = await requireRole("customer");
+
   return (
-    <PlaceholderPage
-      role="customer"
-      eyebrow="YOUR PROFILE"
-      title="Your details, shared on your terms."
-      description="A place for your contact preferences and the profile details you choose to share with a kitchen."
-    />
+    <div className="provider-page space-y-7">
+      <header className="provider-page-heading">
+        <p className="section-kicker">YOUR PROFILE</p>
+        <h1>Your details, shared on your terms.</h1>
+        <p>Keep your account details up to date. You decide when a kitchen may receive your contact information.</p>
+      </header>
+      <CustomerProfileForm fullName={profile.full_name} email={profile.email} phone={profile.phone} />
+    </div>
   );
 }

@@ -362,6 +362,19 @@ export type Database = {
         Args: Record<string, never>;
         Returns: ProviderActivatedCustomer[];
       };
+      get_admin_dashboard_metrics: {
+        Args: Record<string, never>;
+        Returns: {
+          provider_count: number;
+          customer_count: number;
+          listed_kitchen_count: number;
+          pending_kitchen_count: number;
+          request_count: number;
+          pending_request_count: number;
+          verified_activation_count: number;
+          verified_activation_revenue_paise: number;
+        }[];
+      };
     };
     Enums: {
       app_role: AppRole;

@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type {
   ActivationPaymentRow,
+  KitchenCustomerRow,
   ProviderActivatedCustomer,
 } from "@/types/supabase";
 
@@ -34,4 +35,36 @@ export async function getProviderActivatedCustomers(): Promise<
     return { status: "error" };
   }
   return { status: "live", customers: data };
+}
+
+export async function getCustomerActivatedKitchens(): Promise<
+  { status: "live"; memberships: Pick<KitchenCustomerRow, "id" | "kitchen_id" | "request_id" | "kitchen_name" | "activated_at">[] } | { status: "error" }
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("kitchen_customers")
+    .select("id,kitchen_id,request_id,kitchen_name,activated_at")
+    .order("activated_at", { ascending: false });
+
+  if (error) {
+    console.error("Unable to load customer kitchen activations:", error.code);
+    return { status: "error" };
+  }
+  return { status: "live", memberships: data };
+}
+
+export async function getProviderActivationMemberships(): Promise<
+  { status: "live"; memberships: Pick<KitchenCustomerRow, "id" | "kitchen_name" | "activated_at">[] } | { status: "error" }
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("kitchen_customers")
+    .select("id,kitchen_name,activated_at")
+    .order("activated_at", { ascending: false });
+
+  if (error) {
+    console.error("Unable to load provider activation memberships:", error.code);
+    return { status: "error" };
+  }
+  return { status: "live", memberships: data };
 }

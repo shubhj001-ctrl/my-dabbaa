@@ -3,6 +3,7 @@ import "server-only";
 import { isSupabaseConfigured } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import type {
+  ActivationPaymentRow,
   KitchenPhotoRow,
   KitchenRow,
   KitchenServiceAreaRow,
@@ -35,6 +36,102 @@ export type AdminProvidersResult =
   | { status: "live"; data: AdminProvider[] }
   | { status: "unconfigured" }
   | { status: "error" };
+
+export type AdminCustomer = Pick<
+  ProfileRow,
+  "id" | "full_name" | "email" | "phone" | "is_active" | "created_at"
+>;
+
+export type AdminDashboardData = {
+  providers: number;
+  customers: number;
+  kitchens: number;
+  kitchensPendingReview: number;
+  requests: number;
+  requestsPending: number;
+  verifiedActivations: number;
+  activationRevenuePaise: number;
+};
+
+export type AdminPayment = Pick<
+  ActivationPaymentRow,
+  | "id"
+  | "customer_name"
+  | "kitchen_name"
+  | "provider_id"
+  | "amount_paise"
+  | "currency"
+  | "status"
+  | "razorpay_order_id"
+  | "razorpay_payment_id"
+  | "activation_applied"
+  | "paid_at"
+  | "created_at"
+>;
+
+export type AdminQueryResult<T> =
+  | { status: "live"; data: T }
+  | { status: "unconfigured" }
+  | { status: "error" };
+
+export async function getAdminDashboard(): Promise<AdminQueryResult<AdminDashboardData>> {
+  if (!isSupabaseConfigured()) return { status: "unconfigured" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_admin_dashboard_metrics");
+  if (error || !data?.length) {
+    console.error("Unable to load admin dashboard metrics:", error?.code);
+    return { status: "error" };
+  }
+
+  const metrics = data[0];
+  return {
+    status: "live",
+    data: {
+      providers: metrics.provider_count,
+      customers: metrics.customer_count,
+      kitchens: metrics.listed_kitchen_count,
+      kitchensPendingReview: metrics.pending_kitchen_count,
+      requests: metrics.request_count,
+      requestsPending: metrics.pending_request_count,
+      verifiedActivations: metrics.verified_activation_count,
+      activationRevenuePaise: metrics.verified_activation_revenue_paise,
+    },
+  };
+}
+
+export async function getAdminCustomers(): Promise<AdminQueryResult<AdminCustomer[]>> {
+  if (!isSupabaseConfigured()) return { status: "unconfigured" };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,full_name,email,phone,is_active,created_at")
+    .eq("role", "customer")
+    .order("created_at", { ascending: false })
+    .limit(250);
+
+  if (error || !data) {
+    console.error("Unable to load admin customer directory:", error?.code);
+    return { status: "error" };
+  }
+  return { status: "live", data };
+}
+
+export async function getAdminActivationPayments(): Promise<AdminQueryResult<AdminPayment[]>> {
+  if (!isSupabaseConfigured()) return { status: "unconfigured" };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("activation_payments")
+    .select("id,customer_name,kitchen_name,provider_id,amount_paise,currency,status,razorpay_order_id,razorpay_payment_id,activation_applied,paid_at,created_at")
+    .order("created_at", { ascending: false })
+    .limit(250);
+
+  if (error || !data) {
+    console.error("Unable to load admin activation payments:", error?.code);
+    return { status: "error" };
+  }
+  return { status: "live", data };
+}
 
 export async function getProviders(): Promise<AdminProvidersResult> {
   if (!isSupabaseConfigured()) return { status: "unconfigured" };
