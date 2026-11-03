@@ -16,7 +16,7 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 - Customers may contact providers by phone and submit a request to join a provider's service.
 - Before a provider activation is complete, providers may see only the customer's name and request details the customer has authorized.
 - A provider accepts a request before paying the one-time ₹199 activation fee.
-- Provider acceptance is free and does not activate a customer, create a subscription, collect payment, or reveal customer phone/email. Accepted enquiries remain awaiting activation until Razorpay confirms a captured payment through a signed webhook.
+- Provider acceptance is free and does not activate a customer, create a subscription, collect payment, or reveal customer phone/email. Accepted enquiries remain awaiting activation until a captured Razorpay payment is verified by signed webhook or server-to-server gateway status and recorded atomically.
 - Customer requests require consent, are limited to one pending or accepted request per kitchen/customer, and may be withdrawn only while pending.
 - Providers may decline a pending or accepted, unactivated request. An accepted request can be declined only before an activation payment is created or remains in progress; a pending or successful payment must be reconciled first. Rejection releases the active-request constraint so the customer can submit another request.
 - Request consent explicitly authorizes sharing the customer's full name, email, and phone with that selected kitchen only after verified activation. Legacy accepted requests without this recorded consent require a customer opt-in before payment can begin.
@@ -56,10 +56,10 @@ Stage 0 established the UI scaffold. Stage 1 adds Supabase Auth, server-side aut
 ### Payment integration
 
 - Razorpay is used only for the provider-paid ₹199 customer activation fee. Store amounts as integer paise; create orders server-side for exactly `19900` paise and `INR`.
-- `src/app/api/webhooks/razorpay/route.ts` verifies the signature against the original raw request body. Only a verified `payment.captured` event can invoke the atomic activation RPC; `payment.failed` never unlocks customer details. A browser Checkout callback is only a signal to check status.
+- `src/app/api/webhooks/razorpay/route.ts` verifies the signature against the original raw request body. A signed `payment.captured` event or an authenticated server-to-server Razorpay status check of a single captured payment matching the exact order, amount, and currency may invoke the atomic activation RPC; `payment.failed` never unlocks customer details. A browser Checkout callback is only a signal to check status.
 - The Stage 4 migration is `supabase/migrations/20261103000400_activation_payments.sql`; apply it after the request migration. `activation_payments` and `kitchen_customers` have RLS enabled, and normal users have no write grants. The database enforces one customer per kitchen and serializes activation processing.
 - Keep `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, and `SUPABASE_SERVICE_ROLE_KEY` server-side only. The public Razorpay key ID may be sent to Checkout. Configure test mode webhook events `payment.captured` and `payment.failed` at `/api/webhooks/razorpay`.
-- Never represent an activation as complete until the webhook transaction has recorded the captured payment. Food subscriptions and food payments remain outside the platform.
+- Never represent an activation as complete until a trusted webhook or server-to-server gateway status check has recorded the captured payment atomically. Food subscriptions and food payments remain outside the platform.
 - A delayed or abandoned Checkout remains pending and is checked against server-side payment status; retries must not create another activation for an open customer/kitchen pair.
 
 ### Integrations deferred to later stages

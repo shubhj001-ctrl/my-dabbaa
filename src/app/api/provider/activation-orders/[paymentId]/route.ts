@@ -52,26 +52,55 @@ export async function GET(
 
   try {
     const payments = await razorpay.client.orders.fetchPayments(data.razorpay_order_id);
-    const captured = payments.items.some((payment) => payment.status === "captured");
+    const capturedPayments = payments.items.filter((payment) => payment.status === "captured");
     const recordsMatchOrder = payments.items.every((payment) =>
       payment.order_id === data.razorpay_order_id &&
-      payment.amount === 19900 &&
+      Number(payment.amount) === 19900 &&
       payment.currency === "INR",
     );
     const allFailed = recordsMatchOrder &&
       payments.items.length > 0 &&
       payments.items.every((payment) => payment.status === "failed");
 
-    if (captured) {
-      if (!recordsMatchOrder) {
-        console.error("Razorpay status check found a captured payment with mismatched order details.");
+    if (capturedPayments.length > 0) {
+      if (!recordsMatchOrder || capturedPayments.length !== 1) {
+        console.error("Razorpay status check found captured payment details requiring review.");
+        return NextResponse.json({
+          ...data,
+          gatewayStatus: "captured_details_require_review",
+        });
       }
-      return NextResponse.json({
-        ...data,
-        gatewayStatus: recordsMatchOrder
-          ? "captured_waiting_for_verified_webhook"
-          : "captured_details_require_review",
-      });
+
+      const { data: result, error: confirmError } = await createAdminClient().rpc(
+        "confirm_activation_payment",
+        {
+          p_razorpay_order_id: data.razorpay_order_id,
+          p_razorpay_payment_id: capturedPayments[0].id,
+          p_amount_paise: Number(capturedPayments[0].amount),
+          p_currency: capturedPayments[0].currency,
+        },
+      );
+      if (confirmError) {
+        console.error("Unable to reconcile captured Razorpay payment:", confirmError.code);
+        return NextResponse.json(
+          { error: "Razorpay captured the payment, but activation could not be recorded. Don't pay again; contact support." },
+          { status: 500 },
+        );
+      }
+
+      if (result === "activated" || result === "duplicate" || result === "already_active") {
+        return NextResponse.json({ ...data, status: "success", gatewayStatus: result });
+      }
+
+      console.error("Captured Razorpay payment could not activate the request:", result);
+      return NextResponse.json(
+        {
+          error: "Razorpay captured the payment, but the request needs support review. Don't pay again.",
+          ...data,
+          gatewayStatus: result,
+        },
+        { status: 409 },
+      );
     }
 
     if (allFailed) {
