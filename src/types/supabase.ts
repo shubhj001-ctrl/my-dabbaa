@@ -7,7 +7,7 @@ type Table<Row, Insert, Update = Partial<Row>> = {
   Relationships: [];
 };
 
-type ProfileRow = {
+export type ProfileRow = {
   id: string;
   full_name: string;
   email: string;

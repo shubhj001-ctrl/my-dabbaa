@@ -6,6 +6,7 @@ import type {
   KitchenPhotoRow,
   KitchenRow,
   KitchenServiceAreaRow,
+  ProfileRow,
 } from "@/types/supabase";
 
 export type ReviewApplication = {
@@ -19,6 +20,70 @@ export type AdminKitchenQueueResult =
   | { status: "live"; data: ReviewApplication[] }
   | { status: "unconfigured" }
   | { status: "error" };
+
+export type AdminProvider = Pick<
+  ProfileRow,
+  "id" | "full_name" | "email" | "phone" | "is_active" | "created_at"
+> & {
+  kitchens: Pick<
+    KitchenRow,
+    "id" | "kitchen_name" | "approval_status" | "is_listed" | "created_at"
+  >[];
+};
+
+export type AdminProvidersResult =
+  | { status: "live"; data: AdminProvider[] }
+  | { status: "unconfigured" }
+  | { status: "error" };
+
+export async function getProviders(): Promise<AdminProvidersResult> {
+  if (!isSupabaseConfigured()) return { status: "unconfigured" };
+
+  const supabase = await createClient();
+  const { data: providers, error: providersError } = await supabase
+    .from("profiles")
+    .select("id,full_name,email,phone,is_active,created_at")
+    .eq("role", "provider")
+    .order("created_at", { ascending: false });
+
+  if (providersError || !providers) {
+    console.error("Unable to load admin provider directory:", providersError?.code);
+    return { status: "error" };
+  }
+  if (!providers.length) return { status: "live", data: [] };
+
+  const { data: kitchens, error: kitchensError } = await supabase
+    .from("kitchens")
+    .select("id,owner_id,kitchen_name,approval_status,is_listed,created_at")
+    .in("owner_id", providers.map((provider) => provider.id))
+    .order("created_at", { ascending: false });
+
+  if (kitchensError || !kitchens) {
+    console.error("Unable to load kitchens for admin provider directory:", kitchensError?.code);
+    return { status: "error" };
+  }
+
+  const kitchensByProvider = new Map<string, AdminProvider["kitchens"]>();
+  for (const kitchen of kitchens) {
+    const providerKitchens = kitchensByProvider.get(kitchen.owner_id) ?? [];
+    providerKitchens.push({
+      id: kitchen.id,
+      kitchen_name: kitchen.kitchen_name,
+      approval_status: kitchen.approval_status,
+      is_listed: kitchen.is_listed,
+      created_at: kitchen.created_at,
+    });
+    kitchensByProvider.set(kitchen.owner_id, providerKitchens);
+  }
+
+  return {
+    status: "live",
+    data: providers.map((provider) => ({
+      ...provider,
+      kitchens: kitchensByProvider.get(provider.id) ?? [],
+    })),
+  };
+}
 
 export async function getKitchenApplications(): Promise<AdminKitchenQueueResult> {
   if (!isSupabaseConfigured()) return { status: "unconfigured" };
